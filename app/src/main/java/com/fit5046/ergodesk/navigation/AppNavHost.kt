@@ -101,15 +101,9 @@ fun AppNavHost(
             Screen.Dashboard.route
         ) {
 
-            DashboardScreen(
-
-                onNavigateToSettings = {
-
-                    navController.navigate(
-                        Screen.Settings.route
-                    )
-                }
-            )
+            // Settings is now a bottom-nav tab, so Dashboard no longer needs
+            // an in-screen navigation callback.
+            DashboardScreen()
         }
 
 
