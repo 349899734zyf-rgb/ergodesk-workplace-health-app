@@ -26,8 +26,8 @@ class MainActivity : ComponentActivity() {
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
 
-                // Hide the bottom bar on Login/SignUp/Settings/StretchDetail, and only
-                // show it on the 4 main tabs (Dashboard/ErgoForm/Analytics/StretchList).
+                // Hide the bottom bar on Login/SignUp/StretchDetail, and only show it on
+                // the 5 main tabs (Dashboard/ErgoForm/Analytics/StretchList/Settings).
                 val showBottomBar = bottomNavItems.any { item ->
                     currentDestination?.hierarchy?.any { it.route == item.route } == true
                 }
