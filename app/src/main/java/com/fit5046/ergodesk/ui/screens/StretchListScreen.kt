@@ -188,24 +188,14 @@ fun StretchListScreen(
         matchesCategory && matchesQuery
     }
 
-    Scaffold(
-        containerColor = Color.White,
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = ErgoGreen,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.padding(bottom = 80.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Custom Stretch")
-            }
-        }
-    ) { innerPadding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .background(Color.White)
         ) {
             // ---------------------------------------------------------
@@ -328,7 +318,7 @@ fun StretchListScreen(
                 // ---------------------------------------------------------
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 100.dp),
+                    contentPadding = PaddingValues(bottom = 90.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(filteredList, key = { it.id }) { stretch ->
@@ -339,6 +329,19 @@ fun StretchListScreen(
                     }
                 }
             }
+        }
+
+        // Floating Action Button
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            containerColor = ErgoGreen,
+            contentColor = Color.White,
+            shape = CircleShape,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = 20.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Add Custom Stretch")
         }
     }
 
