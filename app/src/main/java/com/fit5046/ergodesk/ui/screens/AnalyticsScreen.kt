@@ -1,25 +1,28 @@
 package com.fit5046.ergodesk.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Chair
+import androidx.compose.material.icons.filled.Coffee
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -30,378 +33,437 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import androidx.compose.ui.unit.sp
+import com.fit5046.ergodesk.data.model.ActivityRecord
+import com.fit5046.ergodesk.data.repository.AnalyticsRepository
+import com.fit5046.ergodesk.ui.theme.ErgoGreen
+import com.fit5046.ergodesk.ui.theme.ErgoGreenLight
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
-/**
- * Analytics screen — sitting and active behaviour summary.
- * Member 3 responsibility.
- *
- * A2 requirements demonstrated:
- * - DatePicker: allows users to select a date for reviewing activity.
- * - Data visualisation: compares sitting and active time across the week.
- *
- * A2 skeleton:
- * Sample data is used to demonstrate the intended UI and visualisation.
- *
- * A4 extension:
- * The sample values will be replaced with real stored activity data
- * retrieved from Room and contextual activity information.
- */
+private val SittingPink = Color(0xFFF4B7B7)
+private val SittingBackground = Color(0xFFFFF1F1)
+private val ActiveGreen = Color(0xFF72B99A)
+private val ActiveBackground = Color(0xFFF0FAF2)
+private val BreakBackground = Color(0xFFEAF7FA)
+private val InsightBackground = Color(0xFFEAF7E4)
+private val SelectorBackground = Color(0xFFF5F6F7)
+private val SecondaryText = Color(0xFF666B66)
+
+private enum class AnalyticsPeriod {
+    DAILY,
+    WEEKLY,
+    MONTHLY
+}
+
+private data class ChartData(
+    val sittingValues: List<Float>,
+    val activeValues: List<Float>,
+    val labels: List<String>
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AnalyticsScreen() {
+
+    var selectedPeriod by remember {
+        mutableStateOf(AnalyticsPeriod.DAILY)
+    }
+
+    var selectedDateMillis by remember {
+        mutableStateOf(System.currentTimeMillis())
+    }
 
     var showDatePicker by remember {
         mutableStateOf(false)
     }
 
-    val dateState = rememberDatePickerState()
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = selectedDateMillis
+    )
 
-    var selectedDateLabel by remember {
-        mutableStateOf("This week")
+    /*
+     * The UI does not contain separate hard-coded Daily,
+     * Weekly or Monthly totals.
+     *
+     * Records are selected from the prototype repository
+     * according to the selected period.
+     */
+    val currentRecords = remember(
+        selectedPeriod,
+        selectedDateMillis
+    ) {
+        getRecordsForPeriod(
+            period = selectedPeriod,
+            selectedDateMillis = selectedDateMillis
+        )
+    }
+
+    val previousRecords = remember(
+        selectedPeriod,
+        selectedDateMillis
+    ) {
+        getPreviousRecordsForPeriod(
+            period = selectedPeriod,
+            selectedDateMillis = selectedDateMillis
+        )
     }
 
     /*
-     * Sample data for the A2 skeleton prototype.
-     *
-     * Values represent example hours recorded during a typical
-     * monitored workday. They are NOT real user data.
-     *
-     * A4 will replace these values with stored activity records.
+     * All summary values are calculated from the records.
      */
-    val dayLabels = listOf(
-        "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"
+    val sittingMinutes = currentRecords.sumOf {
+        it.sittingMinutes
+    }
+
+    val activeMinutes = currentRecords.sumOf {
+        it.activeMinutes
+    }
+
+    val breaksCompleted = currentRecords.sumOf {
+        it.breaksCompleted
+    }
+
+    val breakTarget = currentRecords.sumOf {
+        it.breakTarget
+    }
+
+    val previousSittingMinutes = previousRecords.sumOf {
+        it.sittingMinutes
+    }
+
+    val previousActiveMinutes = previousRecords.sumOf {
+        it.activeMinutes
+    }
+
+    val previousBreaksCompleted = previousRecords.sumOf {
+        it.breaksCompleted
+    }
+
+    val sittingChange = calculatePercentageChange(
+        current = sittingMinutes,
+        previous = previousSittingMinutes
     )
 
-    val sittingHours = listOf(
-        6.5f, 6.0f, 7.0f, 5.5f, 6.2f, 3.5f, 3.0f
+    val activeChange = calculatePercentageChange(
+        current = activeMinutes,
+        previous = previousActiveMinutes
     )
 
-    val activeHours = listOf(
-        1.8f, 2.2f, 1.5f, 2.8f, 2.0f, 4.0f, 4.5f
+    val breaksChange =
+        breaksCompleted - previousBreaksCompleted
+
+    val chartData = buildChartData(
+        period = selectedPeriod,
+        records = currentRecords
     )
 
-    // Used only to scale the prototype chart consistently.
-    val chartMaximumHours = 8f
+    val dateLabel = formatPeriodLabel(
+        millis = selectedDateMillis,
+        period = selectedPeriod
+    )
+
+    val comparisonLabel = when (selectedPeriod) {
+        AnalyticsPeriod.DAILY -> "vs yesterday"
+        AnalyticsPeriod.WEEKLY -> "vs last week"
+        AnalyticsPeriod.MONTHLY -> "vs last month"
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Color.White)
             .verticalScroll(rememberScrollState())
-            .padding(
-                start = 20.dp,
-                end = 20.dp,
-                top = 20.dp,
-                bottom = 100.dp
-            )
+            .padding(bottom = 100.dp)
     ) {
 
-        // ---------------------------------------------------------
-        // Header
-        // ---------------------------------------------------------
+        AnalyticsHeader()
 
-        Text(
-            text = "Analytics",
-            style = MaterialTheme.typography.headlineSmall
-        )
-
-        Text(
-            text = "Review your sitting, activity and break patterns.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
-
-        // ---------------------------------------------------------
-        // Date selection
-        // ---------------------------------------------------------
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp)
         ) {
 
-            Column {
-
-                Text(
-                    text = "Selected period",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = selectedDateLabel,
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
-
-            TextButton(
-                onClick = {
-                    showDatePicker = true
-                }
-            ) {
-                Text("Choose date")
-            }
-        }
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        // ---------------------------------------------------------
-        // Summary
-        // ---------------------------------------------------------
-
-        Text(
-            text = "Activity Summary",
-            style = MaterialTheme.typography.titleMedium
-        )
-
-        Text(
-            text = "Example values for the selected period.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(
-                top = 2.dp,
-                bottom = 10.dp
+            Spacer(
+                modifier = Modifier.height(18.dp)
             )
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-
-            StatCard(
-                modifier = Modifier.weight(1f),
-                title = "Sitting",
-                value = "5h 20m",
-                color = MaterialTheme.colorScheme.errorContainer
-            )
-
-            StatCard(
-                modifier = Modifier.weight(1f),
-                title = "Active",
-                value = "2h 10m",
-                color = MaterialTheme.colorScheme.primaryContainer
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(10.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor =
-                    MaterialTheme.colorScheme.secondaryContainer
-            )
-        ) {
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
-                Column {
-
-                    Text(
-                        text = "Breaks completed",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-
-                    Text(
-                        text = "6 of 8",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                }
-
-                Text(
-                    text = "75%",
-                    style = MaterialTheme.typography.titleLarge
-                )
-            }
-        }
-
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
-
-        // ---------------------------------------------------------
-        // Chart
-        // ---------------------------------------------------------
-
-        Text(
-            text = "Daily Activity — This Week",
-            style = MaterialTheme.typography.titleMedium
-        )
-
-        Text(
-            text = "Compare sitting and active hours for each day.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp)
-        )
-
-        Spacer(
-            modifier = Modifier.height(8.dp)
-        )
-
-        // Legend
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            LegendDot(
-                color = MaterialTheme.colorScheme.error
-            )
-
-            Text(
-                text = " Sitting",
-                style = MaterialTheme.typography.bodySmall
-            )
-
-            Spacer(
-                modifier = Modifier.width(16.dp)
-            )
-
-            LegendDot(
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            Text(
-                text = " Active",
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-
-        Spacer(
-            modifier = Modifier.height(16.dp)
-        )
-
-        /*
-         * Grouped bar chart.
-         *
-         * Each day has TWO separate bars:
-         * - red/error = sitting hours
-         * - primary = active hours
-         *
-         * This is clearer than the previous stacked chart because
-         * both values use the same scale and can be directly compared.
-         */
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.Bottom
-        ) {
-
-            dayLabels.forEachIndexed { index, day ->
-
-                DayBarGroup(
-                    day = day,
-                    sittingHours = sittingHours[index],
-                    activeHours = activeHours[index],
-                    maximumHours = chartMaximumHours
-                )
-            }
-        }
-
-        Spacer(
-            modifier = Modifier.height(24.dp)
-        )
-
-        // ---------------------------------------------------------
-        // Insight
-        // ---------------------------------------------------------
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 2.dp
-            )
-        ) {
-
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-
-                Text(
-                    text = "Weekly Insight",
-                    style = MaterialTheme.typography.titleMedium
+                Icon(
+                    imageVector = Icons.Filled.BarChart,
+                    contentDescription = null,
+                    tint = ErgoGreen,
+                    modifier = Modifier.size(28.dp)
                 )
 
                 Spacer(
-                    modifier = Modifier.height(6.dp)
+                    modifier = Modifier.width(10.dp)
                 )
 
                 Text(
-                    text = "Saturday and Sunday show more active time than weekdays. Consider adding short movement breaks during longer weekday sitting periods.",
-                    style = MaterialTheme.typography.bodyMedium
+                    text = "Analytics",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
+
+            Text(
+                text = "Track your sitting time, activity and break habits.",
+                fontSize = 13.sp,
+                color = Color(0xFF5F6368),
+                modifier = Modifier.padding(
+                    start = 38.dp,
+                    top = 2.dp
+                )
+            )
+
+            Spacer(
+                modifier = Modifier.height(16.dp)
+            )
+
+            /*
+             * Date selector
+             */
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        showDatePicker = true
+                    },
+                shape = RoundedCornerShape(9.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = Color(0xFFD9DDDA)
+                ),
+                color = Color.White
+            ) {
+
+                Row(
+                    modifier = Modifier.padding(
+                        horizontal = 14.dp,
+                        vertical = 12.dp
+                    ),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Icon(
+                        imageVector = Icons.Filled.CalendarMonth,
+                        contentDescription = null,
+                        tint = SecondaryText,
+                        modifier = Modifier.size(21.dp)
+                    )
+
+                    Spacer(
+                        modifier = Modifier.width(12.dp)
+                    )
+
+                    Text(
+                        text = dateLabel,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+
+                    Spacer(
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Choose date",
+                        tint = SecondaryText
+                    )
+                }
+            }
+
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
+
+            AnalyticsPeriodSelector(
+                selectedPeriod = selectedPeriod,
+                onPeriodSelected = {
+                    selectedPeriod = it
+                }
+            )
+
+            Spacer(
+                modifier = Modifier.height(18.dp)
+            )
+
+            /*
+             * Dynamically calculated summary cards
+             */
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+
+                AnalyticsMetricCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.Chair,
+                    background = SittingBackground,
+                    title = "Sitting Time",
+                    value = formatMinutes(sittingMinutes),
+                    comparison = formatPercentageChange(sittingChange),
+                    comparisonLabel = comparisonLabel,
+                    lowerIsBetter = true
+                )
+
+                AnalyticsMetricCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.DirectionsWalk,
+                    background = ActiveBackground,
+                    title = "Active Time",
+                    value = formatMinutes(activeMinutes),
+                    comparison = formatPercentageChange(activeChange),
+                    comparisonLabel = comparisonLabel,
+                    lowerIsBetter = false
+                )
+
+                AnalyticsMetricCard(
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Filled.Coffee,
+                    background = BreakBackground,
+                    title = "Breaks\nCompleted",
+                    value = "$breaksCompleted / $breakTarget",
+                    comparison = formatNumberChange(breaksChange),
+                    comparisonLabel = comparisonLabel,
+                    lowerIsBetter = false
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(22.dp)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                Text(
+                    text = "Sitting vs Active Time",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(
+                    modifier = Modifier.weight(1f)
+                )
+
+                AnalyticsLegend(
+                    color = SittingPink,
+                    label = "Sitting"
+                )
+
+                Spacer(
+                    modifier = Modifier.width(10.dp)
+                )
+
+                AnalyticsLegend(
+                    color = ActiveGreen,
+                    label = "Active"
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.height(12.dp)
+            )
+
+            AnalyticsBarChart(
+                chartData = chartData
+            )
+
+            Spacer(
+                modifier = Modifier.height(20.dp)
+            )
+
+            InsightCard(
+                text = createInsight(
+                    sittingChange = sittingChange,
+                    activeChange = activeChange,
+                    breaksCompleted = breaksCompleted,
+                    breakTarget = breakTarget
+                )
+            )
+
+            Spacer(
+                modifier = Modifier.height(20.dp)
+            )
+
+            Text(
+                text = when (selectedPeriod) {
+                    AnalyticsPeriod.DAILY ->
+                        "Weekly Progress"
+
+                    AnalyticsPeriod.WEEKLY ->
+                        "Daily Break Progress"
+
+                    AnalyticsPeriod.MONTHLY ->
+                        "Break Progress"
+                },
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(
+                modifier = Modifier.height(14.dp)
+            )
+
+            BreakProgressSection(
+                period = selectedPeriod,
+                selectedDateMillis = selectedDateMillis,
+                currentRecords = currentRecords
+            )
+
+            Spacer(
+                modifier = Modifier.height(18.dp)
+            )
+
+            Text(
+                text = "Prototype activity records are used for Assessment 2. " +
+                        "Daily, weekly and monthly results are dynamically calculated " +
+                        "from these records. Room and activity-sensing data can replace " +
+                        "the prototype data source in Assessment 4.",
+                fontSize = 10.sp,
+                lineHeight = 14.sp,
+                color = Color(0xFF8A8A8A)
+            )
+
+            Spacer(
+                modifier = Modifier.height(20.dp)
+            )
         }
-
-        Spacer(
-            modifier = Modifier.height(12.dp)
-        )
-
-        Text(
-            text = "Prototype data shown for Assessment 2. Real activity records will be integrated in Assessment 4.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 
-    // -------------------------------------------------------------
-    // Date picker
-    // -------------------------------------------------------------
-
+    /*
+     * Material 3 DatePicker
+     */
     if (showDatePicker) {
 
         DatePickerDialog(
             onDismissRequest = {
                 showDatePicker = false
             },
-
             confirmButton = {
 
                 TextButton(
                     onClick = {
 
-                        val millis =
-                            dateState.selectedDateMillis
-
-                        if (millis != null) {
-
-                            val localDate =
-                                Instant
-                                    .ofEpochMilli(millis)
-                                    .atZone(
-                                        ZoneId.systemDefault()
-                                    )
-                                    .toLocalDate()
-
-                            selectedDateLabel =
-                                localDate.format(
-                                    DateTimeFormatter
-                                        .ofPattern("dd MMM yyyy")
-                                )
+                        datePickerState.selectedDateMillis?.let {
+                            selectedDateMillis = it
                         }
 
                         showDatePicker = false
@@ -410,7 +472,6 @@ fun AnalyticsScreen() {
                     Text("OK")
                 }
             },
-
             dismissButton = {
 
                 TextButton(
@@ -424,116 +485,216 @@ fun AnalyticsScreen() {
         ) {
 
             DatePicker(
-                state = dateState
+                state = datePickerState
             )
         }
     }
 }
 
-
-/**
- * Displays one day's sitting and active values using
- * two bars with the same scale.
- */
 @Composable
-private fun DayBarGroup(
-    day: String,
-    sittingHours: Float,
-    activeHours: Float,
-    maximumHours: Float
-) {
+private fun AnalyticsHeader() {
 
-    val maximumBarHeight = 125.dp
-
-    val sittingHeight =
-        maximumBarHeight *
-                (sittingHours / maximumHours)
-                    .coerceIn(0f, 1f)
-
-    val activeHeight =
-        maximumBarHeight *
-                (activeHours / maximumHours)
-                    .coerceIn(0f, 1f)
-
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Bottom
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFFF7FBF2)
     ) {
 
         Row(
-            modifier = Modifier.height(maximumBarHeight),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.Bottom
+            modifier = Modifier.padding(
+                horizontal = 18.dp,
+                vertical = 13.dp
+            ),
+            verticalAlignment = Alignment.CenterVertically
         ) {
 
-            Box(
-                modifier = Modifier
-                    .width(9.dp)
-                    .height(sittingHeight)
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 4.dp,
-                            topEnd = 4.dp
-                        )
-                    )
-                    .background(
-                        MaterialTheme.colorScheme.error
-                    )
+            Icon(
+                imageVector = Icons.Filled.Eco,
+                contentDescription = null,
+                tint = ErgoGreen,
+                modifier = Modifier.size(31.dp)
             )
 
-            Box(
-                modifier = Modifier
-                    .width(9.dp)
-                    .height(activeHeight)
-                    .clip(
-                        RoundedCornerShape(
-                            topStart = 4.dp,
-                            topEnd = 4.dp
-                        )
-                    )
-                    .background(
-                        MaterialTheme.colorScheme.primary
-                    )
+            Spacer(
+                modifier = Modifier.width(8.dp)
             )
+
+            Column {
+
+                Text(
+                    text = "ErgoDesk",
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text = "Move Better, Work Smarter",
+                    fontSize = 9.sp,
+                    color = Color(0xFF646A64)
+                )
+            }
+
+            Spacer(
+                modifier = Modifier.weight(1f)
+            )
+
+            Surface(
+                shape = RoundedCornerShape(50),
+                border = BorderStroke(
+                    1.dp,
+                    Color(0xFFD6DDD6)
+                ),
+                color = Color.White
+            ) {
+
+                Icon(
+                    imageVector = Icons.Filled.PersonOutline,
+                    contentDescription = "Profile",
+                    tint = SecondaryText,
+                    modifier = Modifier
+                        .padding(7.dp)
+                        .size(22.dp)
+                )
+            }
         }
-
-        Spacer(
-            modifier = Modifier.height(6.dp)
-        )
-
-        Text(
-            text = day,
-            style = MaterialTheme.typography.bodySmall
-        )
     }
 }
 
-
-/**
- * Summary statistic card.
- */
 @Composable
-private fun StatCard(
-    modifier: Modifier = Modifier,
-    title: String,
-    value: String,
-    color: Color
+private fun AnalyticsPeriodSelector(
+    selectedPeriod: AnalyticsPeriod,
+    onPeriodSelected: (AnalyticsPeriod) -> Unit
 ) {
 
-    Card(
+    val periods = listOf(
+        AnalyticsPeriod.DAILY,
+        AnalyticsPeriod.WEEKLY,
+        AnalyticsPeriod.MONTHLY
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = SelectorBackground,
+                shape = RoundedCornerShape(9.dp)
+            )
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+
+        periods.forEach { period ->
+
+            val isSelected =
+                period == selectedPeriod
+
+            val label = when (period) {
+                AnalyticsPeriod.DAILY -> "Daily"
+                AnalyticsPeriod.WEEKLY -> "Weekly"
+                AnalyticsPeriod.MONTHLY -> "Monthly"
+            }
+
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable {
+                        onPeriodSelected(period)
+                    },
+                shape = RoundedCornerShape(7.dp),
+                color = if (isSelected) {
+                    ErgoGreen
+                } else {
+                    Color.Transparent
+                }
+            ) {
+
+                Box(
+                    modifier = Modifier.padding(
+                        vertical = 9.dp
+                    ),
+                    contentAlignment = Alignment.Center
+                ) {
+
+                    Text(
+                        text = label,
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        },
+                        color = if (isSelected) {
+                            Color.White
+                        } else {
+                            Color(0xFF59615B)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnalyticsMetricCard(
+    modifier: Modifier,
+    icon: ImageVector,
+    background: Color,
+    title: String,
+    value: String,
+    comparison: String,
+    comparisonLabel: String,
+    lowerIsBetter: Boolean
+) {
+
+    val isUp =
+        comparison.startsWith("↑")
+
+    val isDown =
+        comparison.startsWith("↓")
+
+    val isPositive = when {
+        lowerIsBetter && isDown -> true
+        !lowerIsBetter && isUp -> true
+        else -> false
+    }
+
+    val comparisonColor = when {
+        comparison == "—" ->
+            Color.Gray
+
+        isPositive ->
+            ErgoGreen
+
+        else ->
+            Color(0xFFD65A5A)
+    }
+
+    Surface(
         modifier = modifier,
-        colors = CardDefaults.cardColors(
-            containerColor = color
-        )
+        shape = RoundedCornerShape(10.dp),
+        color = background
     ) {
 
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier.padding(11.dp)
         ) {
+
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = ErgoGreen,
+                modifier = Modifier.size(20.dp)
+            )
+
+            Spacer(
+                modifier = Modifier.height(7.dp)
+            )
 
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodySmall
+                fontSize = 11.sp,
+                lineHeight = 13.sp,
+                color = Color(0xFF303530)
             )
 
             Spacer(
@@ -542,28 +703,808 @@ private fun StatCard(
 
             Text(
                 text = value,
-                style = MaterialTheme.typography.headlineSmall
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(
+                modifier = Modifier.height(5.dp)
+            )
+
+            Text(
+                text = comparison,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = comparisonColor
+            )
+
+            Text(
+                text = comparisonLabel,
+                fontSize = 8.sp,
+                color = Color(0xFF777D78)
             )
         }
     }
 }
 
-
-/**
- * Small coloured circle used in the chart legend.
- */
 @Composable
-private fun LegendDot(
-    color: Color
+private fun AnalyticsLegend(
+    color: Color,
+    label: String
 ) {
 
-    Box(
-        modifier = Modifier
-            .width(10.dp)
-            .height(10.dp)
-            .clip(
-                RoundedCornerShape(50)
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        Box(
+            modifier = Modifier
+                .size(
+                    width = 18.dp,
+                    height = 8.dp
+                )
+                .background(
+                    color = color,
+                    shape = RoundedCornerShape(4.dp)
+                )
+        )
+
+        Spacer(
+            modifier = Modifier.width(4.dp)
+        )
+
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = Color(0xFF626762)
+        )
+    }
+}
+
+@Composable
+private fun AnalyticsBarChart(
+    chartData: ChartData
+) {
+
+    if (
+        chartData.sittingValues.isEmpty() ||
+        chartData.activeValues.isEmpty()
+    ) {
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp),
+            contentAlignment = Alignment.Center
+        ) {
+
+            Text(
+                text = "No activity data available",
+                fontSize = 13.sp,
+                color = Color.Gray
             )
-            .background(color)
-    )
+        }
+
+        return
+    }
+
+    val maxValue =
+        (
+                chartData.sittingValues +
+                        chartData.activeValues
+                )
+            .maxOrNull()
+            ?.coerceAtLeast(1f)
+            ?: 1f
+
+    Column {
+
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(170.dp)
+                .padding(
+                    start = 16.dp,
+                    end = 8.dp,
+                    top = 8.dp
+                )
+        ) {
+
+            val graphHeight =
+                size.height
+
+            val groupWidth =
+                size.width /
+                        chartData.sittingValues.size
+
+            /*
+             * Horizontal grid lines
+             */
+            for (i in 0..4) {
+
+                val y =
+                    graphHeight -
+                            (
+                                    graphHeight *
+                                            i / 4f
+                                    )
+
+                drawLine(
+                    color = Color(0xFFE8EBE8),
+                    start = Offset(
+                        x = 0f,
+                        y = y
+                    ),
+                    end = Offset(
+                        x = size.width,
+                        y = y
+                    ),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
+
+            chartData.sittingValues.indices.forEach { index ->
+
+                val centerX =
+                    groupWidth * index +
+                            groupWidth / 2f
+
+                val sittingHeight =
+                    graphHeight *
+                            (
+                                    chartData.sittingValues[index] /
+                                            maxValue
+                                    )
+
+                val activeHeight =
+                    graphHeight *
+                            (
+                                    chartData.activeValues[index] /
+                                            maxValue
+                                    )
+
+                drawLine(
+                    color = SittingPink,
+                    start = Offset(
+                        x = centerX - 6.dp.toPx(),
+                        y = graphHeight
+                    ),
+                    end = Offset(
+                        x = centerX - 6.dp.toPx(),
+                        y = graphHeight - sittingHeight
+                    ),
+                    strokeWidth = 8.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+
+                drawLine(
+                    color = ActiveGreen,
+                    start = Offset(
+                        x = centerX + 6.dp.toPx(),
+                        y = graphHeight
+                    ),
+                    end = Offset(
+                        x = centerX + 6.dp.toPx(),
+                        y = graphHeight - activeHeight
+                    ),
+                    strokeWidth = 8.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+
+            chartData.labels.forEach { label ->
+
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+
+                    Text(
+                        text = label,
+                        fontSize = if (
+                            chartData.labels.size > 7
+                        ) {
+                            7.sp
+                        } else {
+                            9.sp
+                        },
+                        color = Color(0xFF656A65)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InsightCard(
+    text: String
+) {
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = InsightBackground
+    ) {
+
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Icon(
+                imageVector = Icons.Filled.Lightbulb,
+                contentDescription = null,
+                tint = ErgoGreen,
+                modifier = Modifier.size(30.dp)
+            )
+
+            Spacer(
+                modifier = Modifier.width(10.dp)
+            )
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+
+                Text(
+                    text = "Insight",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+
+                Spacer(
+                    modifier = Modifier.height(2.dp)
+                )
+
+                Text(
+                    text = text,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    color = Color(0xFF303530)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BreakProgressSection(
+    period: AnalyticsPeriod,
+    selectedDateMillis: Long,
+    currentRecords: List<ActivityRecord>
+) {
+
+    /*
+     * Daily view shows the selected week's progress.
+     * Weekly view shows that week's daily progress.
+     * Monthly view summarises each week of the month.
+     */
+    when (period) {
+
+        AnalyticsPeriod.DAILY,
+        AnalyticsPeriod.WEEKLY -> {
+
+            val records = if (
+                period == AnalyticsPeriod.DAILY
+            ) {
+                AnalyticsRepository.getWeeklyRecords(
+                    selectedDateMillis
+                )
+            } else {
+                currentRecords
+            }
+
+            if (records.isEmpty()) {
+
+                Text(
+                    text = "No break data available.",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+
+                return
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+
+                records.forEach { record ->
+
+                    val label =
+                        SimpleDateFormat(
+                            "EEE",
+                            Locale.ENGLISH
+                        ).format(
+                            Date(record.timestamp)
+                        )
+
+                    BreakProgressItem(
+                        modifier = Modifier.weight(1f),
+                        label = label,
+                        completed = record.breaksCompleted,
+                        target = record.breakTarget
+                    )
+                }
+            }
+        }
+
+        AnalyticsPeriod.MONTHLY -> {
+
+            val weeklyGroups =
+                currentRecords.chunked(7)
+
+            if (weeklyGroups.isEmpty()) {
+
+                Text(
+                    text = "No break data available.",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+
+                return
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+
+                weeklyGroups.forEachIndexed { index, week ->
+
+                    val completed =
+                        week.sumOf {
+                            it.breaksCompleted
+                        }
+
+                    val target =
+                        week.sumOf {
+                            it.breakTarget
+                        }
+
+                    BreakProgressItem(
+                        modifier = Modifier.weight(1f),
+                        label = "W${index + 1}",
+                        completed = completed,
+                        target = target
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BreakProgressItem(
+    modifier: Modifier,
+    label: String,
+    completed: Int,
+    target: Int
+) {
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        Surface(
+            modifier = Modifier.size(42.dp),
+            shape = RoundedCornerShape(50),
+            color = Color(0xFFF1F8EE),
+            border = BorderStroke(
+                width = 3.dp,
+                color = if (
+                    target > 0 &&
+                    completed >= target
+                ) {
+                    ErgoGreen
+                } else {
+                    ErgoGreenLight
+                }
+            )
+        ) {
+
+            Box(
+                contentAlignment = Alignment.Center
+            ) {
+
+                Text(
+                    text = "$completed/$target",
+                    fontSize = if (
+                        completed >= 10 ||
+                        target >= 10
+                    ) {
+                        7.sp
+                    } else {
+                        8.sp
+                    },
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(
+            modifier = Modifier.height(5.dp)
+        )
+
+        Text(
+            text = label,
+            fontSize = 8.sp,
+            color = SecondaryText
+        )
+    }
+}
+
+/*
+ * ---------------------------------------------------------
+ * DATA / CALCULATION HELPERS
+ * ---------------------------------------------------------
+ */
+
+private fun getRecordsForPeriod(
+    period: AnalyticsPeriod,
+    selectedDateMillis: Long
+): List<ActivityRecord> {
+
+    return when (period) {
+
+        AnalyticsPeriod.DAILY ->
+            AnalyticsRepository.getDailyRecords(
+                selectedDateMillis
+            )
+
+        AnalyticsPeriod.WEEKLY ->
+            AnalyticsRepository.getWeeklyRecords(
+                selectedDateMillis
+            )
+
+        AnalyticsPeriod.MONTHLY ->
+            AnalyticsRepository.getMonthlyRecords(
+                selectedDateMillis
+            )
+    }
+}
+
+private fun getPreviousRecordsForPeriod(
+    period: AnalyticsPeriod,
+    selectedDateMillis: Long
+): List<ActivityRecord> {
+
+    return when (period) {
+
+        AnalyticsPeriod.DAILY ->
+            AnalyticsRepository.getPreviousDailyRecords(
+                selectedDateMillis
+            )
+
+        AnalyticsPeriod.WEEKLY ->
+            AnalyticsRepository.getPreviousWeeklyRecords(
+                selectedDateMillis
+            )
+
+        AnalyticsPeriod.MONTHLY ->
+            AnalyticsRepository.getPreviousMonthlyRecords(
+                selectedDateMillis
+            )
+    }
+}
+
+private fun buildChartData(
+    period: AnalyticsPeriod,
+    records: List<ActivityRecord>
+): ChartData {
+
+    if (records.isEmpty()) {
+
+        return ChartData(
+            sittingValues = emptyList(),
+            activeValues = emptyList(),
+            labels = emptyList()
+        )
+    }
+
+    return when (period) {
+
+        AnalyticsPeriod.DAILY -> {
+
+            /*
+             * A daily ActivityRecord currently contains daily totals.
+             *
+             * For A2 visualisation, the total is distributed into
+             * time blocks using weights. The total itself still comes
+             * from the repository rather than a hard-coded UI total.
+             *
+             * A4 can replace these blocks with actual sensor timestamps.
+             */
+            val record =
+                records.first()
+
+            val sittingWeights =
+                listOf(
+                    0.15f,
+                    0.19f,
+                    0.17f,
+                    0.18f,
+                    0.16f,
+                    0.15f
+                )
+
+            val activeWeights =
+                listOf(
+                    0.08f,
+                    0.10f,
+                    0.19f,
+                    0.22f,
+                    0.20f,
+                    0.21f
+                )
+
+            ChartData(
+                sittingValues =
+                    sittingWeights.map {
+                        record.sittingMinutes *
+                                it / 60f
+                    },
+                activeValues =
+                    activeWeights.map {
+                        record.activeMinutes *
+                                it / 60f
+                    },
+                labels =
+                    listOf(
+                        "8am",
+                        "10am",
+                        "12pm",
+                        "2pm",
+                        "4pm",
+                        "6pm"
+                    )
+            )
+        }
+
+        AnalyticsPeriod.WEEKLY -> {
+
+            ChartData(
+                sittingValues =
+                    records.map {
+                        it.sittingMinutes / 60f
+                    },
+                activeValues =
+                    records.map {
+                        it.activeMinutes / 60f
+                    },
+                labels =
+                    records.map {
+                        SimpleDateFormat(
+                            "EEE",
+                            Locale.ENGLISH
+                        ).format(
+                            Date(it.timestamp)
+                        )
+                    }
+            )
+        }
+
+        AnalyticsPeriod.MONTHLY -> {
+
+            val weeklyGroups =
+                records.chunked(7)
+
+            ChartData(
+                sittingValues =
+                    weeklyGroups.map { week ->
+                        week.sumOf {
+                            it.sittingMinutes
+                        } / 60f
+                    },
+                activeValues =
+                    weeklyGroups.map { week ->
+                        week.sumOf {
+                            it.activeMinutes
+                        } / 60f
+                    },
+                labels =
+                    weeklyGroups.indices.map {
+                        "W${it + 1}"
+                    }
+            )
+        }
+    }
+}
+
+private fun formatMinutes(
+    totalMinutes: Int
+): String {
+
+    if (totalMinutes <= 0) {
+        return "0m"
+    }
+
+    val hours =
+        totalMinutes / 60
+
+    val minutes =
+        totalMinutes % 60
+
+    return when {
+
+        hours == 0 ->
+            "${minutes}m"
+
+        minutes == 0 ->
+            "${hours}h"
+
+        else ->
+            "${hours}h ${minutes}m"
+    }
+}
+
+private fun calculatePercentageChange(
+    current: Int,
+    previous: Int
+): Int {
+
+    if (previous <= 0) {
+        return 0
+    }
+
+    return (
+            (
+                    current - previous
+                    ).toDouble() /
+                    previous.toDouble() *
+                    100.0
+            ).roundToInt()
+}
+
+private fun formatPercentageChange(
+    change: Int
+): String {
+
+    return when {
+
+        change > 0 ->
+            "↑ ${change}%"
+
+        change < 0 ->
+            "↓ ${abs(change)}%"
+
+        else ->
+            "—"
+    }
+}
+
+private fun formatNumberChange(
+    change: Int
+): String {
+
+    return when {
+
+        change > 0 ->
+            "↑ $change"
+
+        change < 0 ->
+            "↓ ${abs(change)}"
+
+        else ->
+            "—"
+    }
+}
+
+private fun createInsight(
+    sittingChange: Int,
+    activeChange: Int,
+    breaksCompleted: Int,
+    breakTarget: Int
+): String {
+
+    val breakCompliance =
+        if (breakTarget > 0) {
+            breaksCompleted.toFloat() /
+                    breakTarget.toFloat()
+        } else {
+            0f
+        }
+
+    return when {
+
+        sittingChange >= 10 ->
+            "Your sitting time has increased compared with the previous period. " +
+                    "Try taking a short movement break soon."
+
+        sittingChange <= -10 ->
+            "Your sitting time has decreased compared with the previous period. " +
+                    "Keep maintaining regular movement breaks."
+
+        activeChange >= 10 ->
+            "Your active time is improving. Keep up the regular movement breaks."
+
+        breakCompliance < 0.5f ->
+            "You have completed fewer than half of your planned breaks. " +
+                    "A short ergonomic stretch may help."
+
+        breakCompliance >= 0.8f ->
+            "You are completing most of your planned breaks. " +
+                    "Keep maintaining this routine."
+
+        else ->
+            "Your activity pattern is relatively balanced. " +
+                    "Continue taking regular ergonomic breaks."
+    }
+}
+
+private fun formatPeriodLabel(
+    millis: Long,
+    period: AnalyticsPeriod
+): String {
+
+    return when (period) {
+
+        AnalyticsPeriod.DAILY -> {
+
+            SimpleDateFormat(
+                "EEE, d MMM yyyy",
+                Locale.ENGLISH
+            ).format(
+                Date(millis)
+            )
+        }
+
+        AnalyticsPeriod.WEEKLY -> {
+
+            val start =
+                Calendar.getInstance().apply {
+
+                    timeInMillis = millis
+
+                    firstDayOfWeek =
+                        Calendar.MONDAY
+
+                    set(
+                        Calendar.DAY_OF_WEEK,
+                        Calendar.MONDAY
+                    )
+                }
+
+            val end =
+                start.clone() as Calendar
+
+            end.add(
+                Calendar.DAY_OF_YEAR,
+                6
+            )
+
+            val startFormatter =
+                SimpleDateFormat(
+                    "d MMM",
+                    Locale.ENGLISH
+                )
+
+            val endFormatter =
+                SimpleDateFormat(
+                    "d MMM yyyy",
+                    Locale.ENGLISH
+                )
+
+            "${startFormatter.format(start.time)} – " +
+                    endFormatter.format(end.time)
+        }
+
+        AnalyticsPeriod.MONTHLY -> {
+
+            SimpleDateFormat(
+                "MMMM yyyy",
+                Locale.ENGLISH
+            ).format(
+                Date(millis)
+            )
+        }
+    }
 }
