@@ -7,8 +7,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 
 import com.fit5046.ergodesk.ui.screens.AnalyticsScreen
-import com.fit5046.ergodesk.ui.screens.DashboardScreen
 import com.fit5046.ergodesk.ui.screens.ErgoFormScreen
+import com.fit5046.ergodesk.ui.screens.HomeScreen
 import com.fit5046.ergodesk.ui.screens.LoginScreen
 import com.fit5046.ergodesk.ui.screens.SettingsScreen
 import com.fit5046.ergodesk.ui.screens.SignUpScreen
@@ -101,15 +101,9 @@ fun AppNavHost(
             Screen.Dashboard.route
         ) {
 
-            DashboardScreen(
-
-                onNavigateToSettings = {
-
-                    navController.navigate(
-                        Screen.Settings.route
-                    )
-                }
-            )
+            // Screen.Dashboard is the "Home" tab. Settings is its own bottom-nav
+            // tab now, so Home needs no in-screen navigation callback.
+            HomeScreen()
         }
 
 
