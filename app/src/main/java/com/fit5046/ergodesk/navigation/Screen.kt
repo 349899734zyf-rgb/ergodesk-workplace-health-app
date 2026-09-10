@@ -17,12 +17,13 @@ sealed class Screen(val route: String) {
     }
 }
 
-// The 4 main tabs shown in the bottom Navigation Bar.
-// (Login/SignUp/Settings/StretchDetail are not bottom-tab destinations — they're
+// The 5 main tabs shown in the bottom Navigation Bar.
+// (Login/SignUp/StretchDetail are not bottom-tab destinations — they're
 // reached via in-screen buttons instead.)
 val bottomNavItems = listOf(
     Screen.Dashboard,
     Screen.ErgoForm,
     Screen.Analytics,
-    Screen.StretchList
+    Screen.StretchList,
+    Screen.Settings
 )

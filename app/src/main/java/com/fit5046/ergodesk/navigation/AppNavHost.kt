@@ -54,9 +54,7 @@ fun AppNavHost(
 
         // Member 2
         composable(Screen.Dashboard.route) {
-            DashboardScreen(
-                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
-            )
+            DashboardScreen()
         }
         composable(Screen.Settings.route) {
             SettingsScreen(

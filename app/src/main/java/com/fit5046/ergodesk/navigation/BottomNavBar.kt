@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,6 +22,7 @@ private fun screenIcon(screen: Screen) = when (screen) {
     Screen.ErgoForm -> Icons.Filled.Assignment
     Screen.Analytics -> Icons.Filled.BarChart
     Screen.StretchList -> Icons.Filled.List
+    Screen.Settings -> Icons.Filled.Settings
     else -> Icons.Filled.Home
 }
 
@@ -29,6 +31,7 @@ private fun screenLabel(screen: Screen) = when (screen) {
     Screen.ErgoForm -> "ErgoForm"
     Screen.Analytics -> "Analytics"
     Screen.StretchList -> "Stretches"
+    Screen.Settings -> "Settings"
     else -> ""
 }
 
