@@ -2,7 +2,7 @@ package com.fit5046.ergodesk.ui.screens
 
 /*
  * FIT5046 Assessment 2 — ErgoDesk
- * Member 2 — Dashboard Screen (skeleton prototype, UI only)
+ * Member 2 — Home Screen (skeleton prototype, UI only)
  *
  * Android components in this file:
  *   LazyColumn, Card, Button / OutlinedButton,
@@ -10,7 +10,11 @@ package com.fit5046.ergodesk.ui.screens
  *   The bottom NavigationBar is provided app-wide by ErgoDeskBottomNavBar
  *   (see navigation/), so this screen no longer draws its own.
  *
- * A4: replace the hard-coded state below with a ViewModel + Room / context sources.
+ * Route object is still Screen.Dashboard ("dashboard"); the team-agreed
+ * label for it is "Home".
+ *
+ * A4: replace the hard-coded state below with a ViewModel reading ActivityRecord
+ * from Room + live context sources.
  */
 
 import androidx.compose.foundation.background
@@ -43,7 +47,7 @@ data class TimelineEvent(
 private val sampleTimeline = listOf(
     TimelineEvent("09:02 – 09:48", "Sitting", "46 min · desk", false),
     TimelineEvent("09:48 – 09:54", "Break taken", "Outdoor walk · 6 min", true),
-    TimelineEvent("09:54 – 10:41", "Sitting", "47 min · slouch detected", false),
+    TimelineEvent("09:54 – 10:41", "Sitting", "47 min · desk", false),
     TimelineEvent("10:41 – 10:47", "Break taken", "Desk stretch · 6 min", true),
     TimelineEvent("10:47 – 11:29", "Sitting", "42 min · in progress", false)
 )
@@ -51,14 +55,14 @@ private val sampleTimeline = listOf(
 /* ───────────────────────────────────── 主屏幕 ───────────────────────────────────── */
 
 @Composable
-fun DashboardScreen() {
+fun HomeScreen() {
 
-    // 骨架原型：状态写死，A4 时由 ViewModel 提供
-    // breakThresholdMinutes 与 Settings 的 "Break interval" 滑块默认值保持一致（35 min）
-    val breakThresholdMinutes = 35
-    val currentSittingMinutes = 32
+    // 骨架原型：状态写死，A4 时由 ViewModel 提供（对齐 Analytics 的 ActivityRecord 口径）
+    // breakThresholdMinutes 与报告 1.4 / 5.1 的 30 min 基线、Settings 滑块默认值一致
+    val breakThresholdMinutes = 30
+    val currentSittingMinutes = 22
     val sittingProgress = currentSittingMinutes / breakThresholdMinutes.toFloat()
-    val breaksTaken = 4
+    val breaksCompleted = 5
     val breaksGoal = 8
 
     // LazyColumn —— 作业要求的六大基础组件之一
@@ -74,12 +78,12 @@ fun DashboardScreen() {
         item {
             Column(modifier = Modifier.padding(top = 4.dp)) {
                 Text(
-                    "Dashboard",
+                    "Home",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    "Tuesday, 8 September",
+                    "Tue, 8 Sep 2026",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -176,9 +180,9 @@ fun DashboardScreen() {
         /* ── 3. 今日统计 ── */
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("4 h 12 m", "Sitting today", Modifier.weight(1f))
-                StatCard("$breaksTaken / $breaksGoal", "Breaks completed", Modifier.weight(1f))
-                StatCard("82", "Posture score", Modifier.weight(1f))
+                StatCard("6 h 20 m", "Sitting today", Modifier.weight(1f))
+                StatCard("$breaksCompleted / $breaksGoal", "Breaks completed", Modifier.weight(1f))
+                StatCard("52m", "Longest sit", Modifier.weight(1f))
             }
         }
 
@@ -191,7 +195,7 @@ fun DashboardScreen() {
                 ) {
                     Text("Daily movement goal", style = MaterialTheme.typography.labelLarge)
                     Text(
-                        "$breaksTaken of $breaksGoal breaks",
+                        "$breaksCompleted of $breaksGoal breaks",
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -199,7 +203,7 @@ fun DashboardScreen() {
                 Spacer(Modifier.height(8.dp))
                 // 附加组件：Progress indicator（线性）
                 LinearProgressIndicator(
-                    progress = { breaksTaken / breaksGoal.toFloat() },
+                    progress = { breaksCompleted / breaksGoal.toFloat() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(10.dp)
@@ -230,15 +234,21 @@ fun DashboardScreen() {
         /* ── 6. 今日时间线标题 ── */
         item {
             Text(
-                "Today's activity",
+                "Recent activity",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
 
-        /* ── 7. 时间线列表项 ── */
-        items(sampleTimeline) { event -> TimelineRow(event) }
+        /* ── 7. 时间线：只显示最近 3 条，其余进 "View all" ── */
+        items(sampleTimeline.take(3)) { event -> TimelineRow(event) }
+        item {
+            TextButton(
+                onClick = { /* A4: open full activity history */ },
+                contentPadding = PaddingValues(0.dp)
+            ) { Text("View all") }
+        }
     }
 }
 
@@ -309,6 +319,6 @@ private fun TimelineRow(event: TimelineEvent) {
 
 @Preview(showBackground = true, widthDp = 393, heightDp = 851)
 @Composable
-private fun DashboardScreenPreview() {
-    ErgoDeskTheme { DashboardScreen() }
+private fun HomeScreenPreview() {
+    ErgoDeskTheme { HomeScreen() }
 }
