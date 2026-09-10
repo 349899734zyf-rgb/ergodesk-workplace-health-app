@@ -2,38 +2,47 @@ package com.fit5046.ergodesk.ui.screens
 
 /*
  * FIT5046 Assessment 2 — ErgoDesk
- * Member 2 — Settings Screen (skeleton prototype, UI only)
+ * Member 2 — Settings screen (skeleton prototype, UI only).
  *
- * 反向导航：由 AppNavHost 传入 onLogout（"Sign out" 按钮触发，回到 Login）。
- * 底部 NavigationBar 由 ErgoDeskBottomNavBar 全局提供，本屏不再自绘。
+ * Back navigation: onLogout comes from AppNavHost ("Sign out" -> Login).
+ * The bottom NavigationBar is app-wide (ErgoDeskBottomNavBar).
  *
- * 工作画像（上下班时间、职业、工位、不适部位）由 Member 3 的 ErgoForm
- * ergonomic assessment 维护并存进 Room，本屏只读展示、不重复采集。
- * Settings 只管 app 偏好。这里的 Quiet hours 是"免打扰时段"，
- * 和 ErgoForm 的"工作时段"是两回事。
+ * The work profile (work hours, job type, discomfort areas) lives in
+ * Member 3's ErgoForm assessment and is read-only here. Settings only holds
+ * app preferences. "Quiet hours" is a do-not-disturb window, not work hours.
  *
- * 本文件包含的 Android components：
- *   基础 —— Expanded (Exposed) Dropdown Menu ×2
- *   附加 —— Switch ×4、Slider ×2、TimePicker ×2（对话框）
+ * Components: Expanded (Exposed) Dropdown Menu x2 (basic);
+ * Switch x4, Slider x2, TimePicker x2 in a dialog (additional).
  *
- * 同时演示 Step 4 的三条 FORM DESIGN GUIDELINES：
- *   G1 相关字段分组并加区块标题（Monitoring / Schedule / Reminders / Context sources）
- *   G2 控件类型匹配数据类型（时间用 TimePicker、区间用 Slider、选项用 Dropdown，杜绝格式错误）
- *   G3 每个控件旁边实时显示当前值（"30 min"、"12:30"），用户不用猜
+ * Step 4 form guidelines:
+ *   G1  related fields grouped under section headers (Monitoring / Schedule /
+ *       Reminders / Context sources)
+ *   G2  control type matches the data type (time -> TimePicker, range ->
+ *       Slider, choice -> Dropdown), which blocks bad input
+ *   G3  the current value is always visible next to each control ("30 min",
+ *       "12:30"), so the user never has to guess
  */
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
+import com.fit5046.ergodesk.ui.theme.ErgoGreen
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -41,7 +50,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(onLogout: () -> Unit) {
 
-    /* ── 骨架原型的本地状态；A4 时改由 ViewModel + Room/DataStore 提供 ── */
+    // Prototype: local state only; A4 supplies this from a ViewModel + Room/DataStore.
     var monitoringEnabled by remember { mutableStateOf(true) }
     var smartMode by remember { mutableStateOf(true) }
     var weatherAware by remember { mutableStateOf(true) }
@@ -64,156 +73,174 @@ fun SettingsScreen(onLogout: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .background(Color.White)
     ) {
 
-        Text(
-            "Settings",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
+        ErgoDeskHeader()
 
-        /* ── 用户信息条（只读；工作画像由 ErgoForm 的 ergonomic assessment 维护）── */
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            Column(
+
+            /* Title */
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 8.dp)
+            ) {
+                Icon(
+                    Icons.Filled.Settings,
+                    contentDescription = null,
+                    tint = ErgoGreen,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Settings", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+
+            /* User card — read-only; the profile is maintained in the ErgoForm assessment. */
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = ErgoSoftGreen
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text("Sherry Fang", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Office worker · 8 h screen time / day",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ErgoMutedText
+                    )
+                    Text(
+                        "From your ergonomic assessment",
+                        fontSize = 11.sp,
+                        color = ErgoMutedText,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            }
+
+            /* G1 — section 1: Monitoring */
+            SectionHeader("Monitoring")
+
+            SettingSwitchRow(
+                title = "Enable sitting monitoring",
+                subtitle = "Track sitting time in the background",
+                checked = monitoringEnabled,
+                onCheckedChange = { monitoringEnabled = it }
+            )
+            SettingSwitchRow(
+                title = "Smart context-aware mode",
+                subtitle = "Automatically adjust the break interval from your recent break history",
+                checked = smartMode,
+                onCheckedChange = { smartMode = it }
+            )
+
+            // G2 + G3: a Slider instead of a text field; current value shown top-right.
+            SettingSliderRow(
+                title = "Break interval",
+                valueLabel = "${breakInterval.roundToInt()} min",
+                value = breakInterval,
+                onValueChange = { breakInterval = it },
+                valueRange = 20f..90f,
+                steps = 13,
+                endLabels = "20 min" to "90 min"
+            )
+            SettingSliderRow(
+                title = "Movement sensitivity",
+                valueLabel = "Level ${movementSensitivity.roundToInt()}",
+                value = movementSensitivity,
+                onValueChange = { movementSensitivity = it },
+                valueRange = 1f..5f,
+                steps = 3,
+                endLabels = "Relaxed" to "Sensitive"
+            )
+
+            /* G1 — section 2: Schedule */
+            SectionHeader("Schedule")
+
+            // G2: time is entered through a TimePicker dialog, so "9pm" / "21:00" style
+            // input errors are impossible.
+            TimeFieldRow(
+                label = "Quiet hours start",
+                value = quietStart,
+                onClick = { showQuietStartPicker = true }
+            )
+            TimeFieldRow(
+                label = "Quiet hours end",
+                value = quietEnd,
+                onClick = { showQuietEndPicker = true }
+            )
+            Text(
+                "Reminders are muted during these hours (e.g. lunch or a focus block).",
+                style = MaterialTheme.typography.bodySmall,
+                color = ErgoMutedText,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
+            )
+
+            /* G1 — section 3: Reminders */
+            SectionHeader("Reminders")
+
+            // Basic component: Expanded (Exposed) Dropdown Menu.
+            DropdownField(
+                label = "Reminder style",
+                options = reminderStyles,
+                selected = reminderStyle,
+                onSelected = { reminderStyle = it }
+            )
+            DropdownField(
+                label = "Break activity preference",
+                options = breakActivities,
+                selected = breakActivity,
+                onSelected = { breakActivity = it }
+            )
+
+            /* G1 — section 4: Context sources */
+            SectionHeader("Context sources")
+
+            SettingSwitchRow(
+                title = "Weather-based suggestions",
+                subtitle = "Suggest an outdoor walk when conditions are suitable",
+                checked = weatherAware,
+                onCheckedChange = { weatherAware = it }
+            )
+            SettingSwitchRow(
+                title = "Calendar awareness",
+                subtitle = "Hold reminders while you are in a meeting",
+                checked = calendarAware,
+                onCheckedChange = { calendarAware = it }
+            )
+
+            Spacer(Modifier.height(20.dp))
+
+            Button(
+                onClick = { /* A4: persist to Room / DataStore */ },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Text("Sherry Fang", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Office worker · 8 h screen time / day",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "From your ergonomic assessment",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-            }
+                    .height(50.dp)
+            ) { Text("Save settings") }
+
+            Spacer(Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = onLogout,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                border = BorderStroke(1.dp, ErgoGreen)
+            ) { Text("Sign out") }
+
+            Spacer(Modifier.height(24.dp))
         }
-
-        /* ══ G1: 区块一 —— Monitoring ══ */
-        SectionHeader("Monitoring")
-
-        SettingSwitchRow(
-            title = "Enable sitting monitoring",
-            subtitle = "Track sitting time in the background",
-            checked = monitoringEnabled,
-            onCheckedChange = { monitoringEnabled = it }
-        )
-        SettingSwitchRow(
-            title = "Smart context-aware mode",
-            subtitle = "Automatically adjust the break interval from your recent break history",
-            checked = smartMode,
-            onCheckedChange = { smartMode = it }
-        )
-
-        // G2 + G3: 用 Slider 而不是输入框；数值实时显示在右上角
-        SettingSliderRow(
-            title = "Break interval",
-            valueLabel = "${breakInterval.roundToInt()} min",
-            value = breakInterval,
-            onValueChange = { breakInterval = it },
-            valueRange = 20f..90f,
-            steps = 13,
-            endLabels = "20 min" to "90 min"
-        )
-        SettingSliderRow(
-            title = "Movement sensitivity",
-            valueLabel = "Level ${movementSensitivity.roundToInt()}",
-            value = movementSensitivity,
-            onValueChange = { movementSensitivity = it },
-            valueRange = 1f..5f,
-            steps = 3,
-            endLabels = "Relaxed" to "Sensitive"
-        )
-
-        /* ══ G1: 区块二 —— Schedule ══ */
-        SectionHeader("Schedule")
-
-        // G2: 时间用 TimePicker 对话框输入，避免用户输入 "9pm"/"21:00" 这类格式错误
-        TimeFieldRow(
-            label = "Quiet hours start",
-            value = quietStart,
-            onClick = { showQuietStartPicker = true }
-        )
-        TimeFieldRow(
-            label = "Quiet hours end",
-            value = quietEnd,
-            onClick = { showQuietEndPicker = true }
-        )
-        Text(
-            "Reminders are muted during these hours (e.g. lunch or a focus block).",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
-        )
-
-        /* ══ G1: 区块三 —— Reminders ══ */
-        SectionHeader("Reminders")
-
-        // 基础组件：Expanded (Exposed) Dropdown Menu
-        DropdownField(
-            label = "Reminder style",
-            options = reminderStyles,
-            selected = reminderStyle,
-            onSelected = { reminderStyle = it }
-        )
-        DropdownField(
-            label = "Break activity preference",
-            options = breakActivities,
-            selected = breakActivity,
-            onSelected = { breakActivity = it }
-        )
-
-        /* ══ G1: 区块四 —— Context sources ══ */
-        SectionHeader("Context sources")
-
-        SettingSwitchRow(
-            title = "Weather-based suggestions",
-            subtitle = "Suggest an outdoor walk when conditions are suitable",
-            checked = weatherAware,
-            onCheckedChange = { weatherAware = it }
-        )
-        SettingSwitchRow(
-            title = "Calendar awareness",
-            subtitle = "Hold reminders while you are in a meeting",
-            checked = calendarAware,
-            onCheckedChange = { calendarAware = it }
-        )
-
-        Spacer(Modifier.height(20.dp))
-
-        Button(
-            onClick = { /* A4: persist to Room / DataStore */ },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-        ) { Text("Save settings") }
-
-        Spacer(Modifier.height(8.dp))
-
-        OutlinedButton(
-            onClick = onLogout,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(50.dp)
-        ) { Text("Sign out") }
-
-        Spacer(Modifier.height(24.dp))
     }
 
-    /* ── TimePicker 对话框（附加组件）── */
+    /* TimePicker dialogs (additional component). */
     if (showQuietStartPicker) {
         TimePickerDialogM3(
             title = "Quiet hours start",
@@ -238,18 +265,18 @@ fun SettingsScreen(onLogout: () -> Unit) {
     }
 }
 
-/* ───────────────────────────────── 复用小组件 ───────────────────────────────── */
+/* Reusable pieces */
 
 @Composable
 private fun SectionHeader(text: String) {
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
+        fontSize = 13.sp,
         fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
+        color = ErgoGreen,
         modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
     )
-    HorizontalDivider()
+    HorizontalDivider(color = ErgoHairline)
 }
 
 @Composable
@@ -270,11 +297,11 @@ private fun SettingSwitchRow(
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = ErgoMutedText
             )
         }
         Spacer(Modifier.width(12.dp))
-        // 附加组件：Switch
+        // Additional component: Switch.
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -295,15 +322,15 @@ private fun SettingSliderRow(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
-            // G3: 当前值始终可见
+            // G3: current value stays visible.
             Text(
                 valueLabel,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
+                color = ErgoGreen
             )
         }
-        // 附加组件：Slider
+        // Additional component: Slider.
         Slider(
             value = value,
             onValueChange = onValueChange,
@@ -314,31 +341,24 @@ private fun SettingSliderRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                endLabels.first,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                endLabels.second,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(endLabels.first, style = MaterialTheme.typography.labelSmall, color = ErgoMutedText)
+            Text(endLabels.second, style = MaterialTheme.typography.labelSmall, color = ErgoMutedText)
         }
     }
 }
 
-/* 时间字段：整行可点击，弹出 TimePicker。
- * 不用 OutlinedTextField 是因为 readOnly 的输入框仍可能被键盘聚焦，
- * 用可点击的行更符合 G2「控件类型匹配数据类型」。 */
-@OptIn(ExperimentalMaterial3Api::class)
+/* Whole-row tap target that opens a TimePicker. A read-only text field can still
+ * grab keyboard focus, so a clickable row fits G2 better. */
 @Composable
 private fun TimeFieldRow(label: String, value: String, onClick: () -> Unit) {
-    OutlinedCard(
+    Surface(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
+            .padding(vertical = 6.dp),
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, ErgoHairline),
+        color = Color.White
     ) {
         Row(
             modifier = Modifier
@@ -347,19 +367,15 @@ private fun TimeFieldRow(label: String, value: String, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            // G3: 当前值直接显示在控件上
+            // G3: current value shown on the control.
             Text(
                 value,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary
+                color = ErgoGreen
             )
             Spacer(Modifier.width(12.dp))
-            Text(
-                "Change",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("Change", style = MaterialTheme.typography.labelMedium, color = ErgoMutedText)
         }
     }
 }
@@ -374,7 +390,7 @@ private fun DropdownField(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    // 基础组件：Expanded (Exposed) Dropdown Menu
+    // Basic component: Expanded (Exposed) Dropdown Menu.
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
@@ -407,7 +423,7 @@ private fun DropdownField(
     }
 }
 
-/* Material3 没有现成的 TimePickerDialog，这里用 Dialog 包一层 TimePicker */
+/* Material3 has no ready-made TimePickerDialog, so wrap TimePicker in a Dialog. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimePickerDialogM3(
@@ -442,7 +458,7 @@ private fun TimePickerDialogM3(
                         .fillMaxWidth()
                         .padding(bottom = 16.dp)
                 )
-                // 附加组件：TimePicker
+                // Additional component: TimePicker.
                 TimePicker(state = state)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
