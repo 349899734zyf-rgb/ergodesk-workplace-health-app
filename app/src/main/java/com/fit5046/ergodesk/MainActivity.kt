@@ -1,9 +1,12 @@
 package com.fit5046.ergodesk
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
@@ -17,19 +20,35 @@ import com.fit5046.ergodesk.navigation.bottomNavItems
 import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
 
 class MainActivity : ComponentActivity() {
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
+
+        // Android 13+ requires runtime permission for notifications.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+        }
+
         setContent {
             ErgoDeskTheme {
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentDestination = navBackStackEntry?.destination
 
-                // Hide the bottom bar on Login/SignUp/StretchDetail, and only show it on
-                // the 5 main tabs (Dashboard/ErgoForm/Analytics/StretchList/Settings).
+                // Show the bottom bar only on the five main screens.
                 val showBottomBar = bottomNavItems.any { item ->
-                    currentDestination?.hierarchy?.any { it.route == item.route } == true
+                    currentDestination?.hierarchy?.any {
+                        it.route == item.route
+                    } == true
                 }
 
                 Scaffold(
