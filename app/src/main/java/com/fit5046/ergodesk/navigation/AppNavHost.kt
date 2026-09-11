@@ -32,62 +32,30 @@ fun AppNavHost(
         // Person 1
         // ---------------------------------------------------------------------
 
-        composable(
-            Screen.Login.route
-        ) {
-
+        composable("login") {
             LoginScreen(
-
-                onLoginSuccess = {
-
-                    navController.navigate(
-                        Screen.Dashboard.route
-                    ) {
-
-                        popUpTo(
-                            Screen.Login.route
-                        ) {
-                            inclusive = true
-                        }
-                    }
-                },
-
                 onNavigateToSignUp = {
-
-                    navController.navigate(
-                        Screen.SignUp.route
-                    )
+                    navController.navigate("signup")
+                },
+                onLoginSuccess = {
+                    navController.navigate("dashboard") {
+                        popUpTo("login") {inclusive = true}
+                    }
                 }
             )
         }
 
-
-        composable(
-            Screen.SignUp.route
-        ) {
-
+        composable("signup") {
             SignUpScreen(
-
-                onSignUpSuccess = {
-
-                    // Final agreed flow:
-                    // Sign Up -> Login -> Home
-
-                    navController.navigate(
-                        Screen.Login.route
-                    ) {
-
-                        popUpTo(
-                            Screen.SignUp.route
-                        ) {
-                            inclusive = true
-                        }
+                onNavigateToLogin = {
+                    navController.navigate("login") {
+                        popUpTo("signup") {inclusive = true}
                     }
                 },
-
-                onNavigateToLogin = {
-
-                    navController.popBackStack()
+                onSignUpSuccess = {
+                    navController.navigate("dashboard") {
+                        popUpTo("login") {inclusive = true}
+                    }
                 }
             )
         }
