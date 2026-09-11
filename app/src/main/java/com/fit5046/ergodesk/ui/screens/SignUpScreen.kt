@@ -33,11 +33,6 @@ fun SignUpScreen(
     var isPasswordVisible by remember {mutableStateOf(false)}
     var dateOfBirth by remember {mutableStateOf("")}
 
-    //Job Type Dropdown State
-    val jobTypes = listOf("University Student", "Software Developer", "Office Worker", "Remote Worker", "Other")
-    var isJobMenuExpanded by remember {mutableStateOf(false)}
-    var selectedJobType by remember {mutableStateOf("")}
-
     //Primary Ergonomic Concern Dropdown State
     val discomfortAreas = listOf("Neck & Shoulders", "Lower Back", "Wrists & Hands", "General Sedentary")
     var isDiscomfortExpanded by remember {mutableStateOf(false)}
@@ -147,45 +142,6 @@ fun SignUpScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            //Job Type Dropdown
-            ExposedDropdownMenuBox(
-                expanded = isJobMenuExpanded,
-                onExpandedChange = {isJobMenuExpanded = it},
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = selectedJobType,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = {Text("Job Type")},
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = isJobMenuExpanded)
-                    },
-                    modifier = Modifier.fillMaxWidth().menuAnchor(
-                        type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                        enabled = true
-                    )
-                )
-
-                ExposedDropdownMenu(
-                    expanded = isJobMenuExpanded,
-                    onDismissRequest = {isJobMenuExpanded = false}
-                ) {
-                    jobTypes.forEach {option ->
-                        DropdownMenuItem(
-                            text = {Text(option)},
-                            onClick = {
-                                selectedJobType = option
-                                isJobMenuExpanded = false
-                            },
-                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
             //Primary Ergonomic Concern Dropdown
             ExposedDropdownMenuBox(
                 expanded = isDiscomfortExpanded,
@@ -228,7 +184,7 @@ fun SignUpScreen(
             //Sign Up Button
             Button(
                 onClick = {
-                    if (fullName.isBlank() || email.isBlank() || password.isBlank() || dateOfBirth.isBlank()|| selectedJobType.isBlank() || selectedDiscomfort.isBlank()) {
+                    if (fullName.isBlank() || email.isBlank() || password.isBlank() || dateOfBirth.isBlank() || selectedDiscomfort.isBlank()) {
                         Toast.makeText(context, "Please fill out all details!", Toast.LENGTH_SHORT).show()
                     } else {Toast.makeText(context, "Registration Successful!", Toast.LENGTH_SHORT).show()
                         onSignUpSuccess()
