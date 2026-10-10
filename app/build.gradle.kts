@@ -1,6 +1,8 @@
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -56,8 +58,13 @@ dependencies {
     // ErgoDesk shared skeleton navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
-    // Icons used by the ErgoDesk skeleton
+    // Icons used by ErgoDesk
     implementation("androidx.compose.material:material-icons-extended:1.6.7")
+
+    // Week 7 Room Lab
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     // Unit testing
     testImplementation(libs.junit)
