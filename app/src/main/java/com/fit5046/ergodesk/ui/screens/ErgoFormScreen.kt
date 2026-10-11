@@ -24,7 +24,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fit5046.ergodesk.data.model.ErgonomicAssessment
-import com.fit5046.ergodesk.data.repository.AssessmentRepository
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fit5046.ergodesk.data.repository.toErgonomicAssessment
+import com.fit5046.ergodesk.data.repository.toRoomAssessment
+import com.fit5046.ergodesk.viewmodel.AssessmentViewModel
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -38,7 +41,7 @@ private val FormDeleteRed = Color(0xFFC94B4B)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ErgoFormScreen() {
+fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
 
     /*
      * These are fixed domain options, not user data.
@@ -127,11 +130,10 @@ fun ErgoFormScreen() {
         is24Hour = true
     )
 
-    /*
-     * Repository uses SnapshotStateList, so Compose
-     * automatically refreshes when records change.
-     */
-    val savedAssessments = AssessmentRepository.assessments
+    val roomAssessments by assessmentViewModel.allAssessments
+        .collectAsState(initial = emptyList())
+
+    val savedAssessments = roomAssessments.map { it.toErgonomicAssessment() }
 
     fun resetForm() {
         jobType = jobTypes.first()
@@ -158,48 +160,47 @@ fun ErgoFormScreen() {
     }
 
     fun saveAssessment() {
+        val startParts = startTime.split(":")
+        val endParts = endTime.split(":")
+        val startMinutes = startParts.getOrNull(0)?.toIntOrNull()?.let { hour ->
+            startParts.getOrNull(1)?.toIntOrNull()?.let { minute -> hour * 60 + minute }
+        } ?: -1
+        val endMinutes = endParts.getOrNull(0)?.toIntOrNull()?.let { hour ->
+            endParts.getOrNull(1)?.toIntOrNull()?.let { minute -> hour * 60 + minute }
+        } ?: -1
+
+        if (startMinutes < 0 || endMinutes <= startMinutes) {
+            message = "End time must be later than start time."
+            return
+        }
 
         val editingId = editingAssessmentId
+        val existing = roomAssessments.firstOrNull { it.uid.toLong() == editingId }
 
-        if (editingId == null) {
+        if (editingId != null && existing == null) {
+            message = "Assessment not found."
+            return
+        }
 
-            AssessmentRepository.addAssessment(
-                ErgonomicAssessment(
-                    id = System.currentTimeMillis(),
-                    createdAt = System.currentTimeMillis(),
-                    jobType = jobType,
-                    mainDiscomfortArea = mainDiscomfort,
-                    workStartTime = startTime,
-                    workEndTime = endTime,
-                    concernAreas = concerns,
-                    notes = notes
-                )
-            )
+        val assessment = ErgonomicAssessment(
+            id = existing?.uid?.toLong() ?: 0L,
+            createdAt = existing?.date?.toLongOrNull() ?: System.currentTimeMillis(),
+            jobType = jobType,
+            mainDiscomfortArea = mainDiscomfort,
+            workStartTime = startTime,
+            workEndTime = endTime,
+            concernAreas = concerns,
+            notes = notes
+        )
 
-            message = "Assessment saved."
-
+        if (existing == null) {
+            assessmentViewModel.insertAssessment(assessment.toRoomAssessment())
+            message = "Saving assessment..."
         } else {
-
-            val existing =
-                AssessmentRepository.getAssessment(
-                    editingId
-                )
-
-            if (existing != null) {
-
-                AssessmentRepository.updateAssessment(
-                    existing.copy(
-                        jobType = jobType,
-                        mainDiscomfortArea = mainDiscomfort,
-                        workStartTime = startTime,
-                        workEndTime = endTime,
-                        concernAreas = concerns,
-                        notes = notes
-                    )
-                )
-
-                message = "Assessment updated."
-            }
+            assessmentViewModel.updateAssessment(
+                assessment.toRoomAssessment(active = existing.isActive)
+            )
+            message = "Updating assessment..."
         }
 
         resetForm()
@@ -747,9 +748,9 @@ fun ErgoFormScreen() {
                         },
                         onDelete = {
 
-                            AssessmentRepository.deleteAssessment(
-                                assessment.id
-                            )
+                            roomAssessments.firstOrNull {
+                                it.uid.toLong() == assessment.id
+                            }?.let { assessmentViewModel.deleteAssessment(it) }
 
                             if (
                                 editingAssessmentId ==
@@ -774,9 +775,7 @@ fun ErgoFormScreen() {
             )
 
             Text(
-                text = "Assessment 2 prototype: saved assessments are currently " +
-                        "stored in an in-memory repository. Room persistence can replace " +
-                        "this repository in Assessment 4.",
+                text = "Assessments are stored on this device.",
                 fontSize = 10.sp,
                 lineHeight = 14.sp,
                 color = Color(0xFF8A8A8A)
