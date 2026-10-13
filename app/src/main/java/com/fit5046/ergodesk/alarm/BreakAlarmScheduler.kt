@@ -5,10 +5,12 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.SystemClock
+import android.util.Log
 
 object BreakAlarmScheduler {
 
     private const val REQUEST_CODE = 1001
+    private const val TAG = "ErgoDeskAlarm"
 
     fun scheduleBreakReminder(
         context: Context,
@@ -37,6 +39,8 @@ object BreakAlarmScheduler {
             triggerTime,
             pendingIntent
         )
+
+        Log.d(TAG, "Break reminder scheduled in $delayMinutes minutes")
     }
 
     fun cancelBreakReminder(context: Context) {
@@ -57,5 +61,7 @@ object BreakAlarmScheduler {
         )
 
         alarmManager.cancel(pendingIntent)
+
+        Log.d(TAG, "Break reminder cancelled")
     }
 }

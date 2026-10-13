@@ -1,4 +1,3 @@
-
 package com.fit5046.ergodesk.viewmodel
 
 import android.app.Application
@@ -9,6 +8,8 @@ import com.fit5046.ergodesk.data.room.Assessment
 import com.fit5046.ergodesk.data.room.ErgoDeskDatabase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.cancellation.CancellationException
 
 class AssessmentViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -25,21 +26,60 @@ class AssessmentViewModel(application: Application) : AndroidViewModel(applicati
         activeAssessment = repository.activeAssessment
     }
 
-    fun insertAssessment(assessment: Assessment) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.insertAssessment(assessment)
+    fun insertAssessment(
+        assessment: Assessment,
+        onResult: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val success = try {
+                withContext(Dispatchers.IO) {
+                    repository.insertAssessment(assessment)
+                }
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            onResult(success)
         }
     }
 
-    fun updateAssessment(assessment: Assessment) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.updateAssessment(assessment)
+    fun updateAssessment(
+        assessment: Assessment,
+        onResult: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val success = try {
+                withContext(Dispatchers.IO) {
+                    repository.updateAssessment(assessment)
+                }
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            onResult(success)
         }
     }
 
-    fun deleteAssessment(assessment: Assessment) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.deleteAssessment(assessment)
+    fun deleteAssessment(
+        assessment: Assessment,
+        onResult: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val success = try {
+                withContext(Dispatchers.IO) {
+                    repository.deleteAssessment(assessment)
+                }
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            onResult(success)
         }
     }
 }

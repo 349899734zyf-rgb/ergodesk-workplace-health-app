@@ -386,12 +386,12 @@ fun HomeScreen() {
                             BreakAlarmScheduler
                                 .scheduleBreakReminder(
                                     context = context,
-                                    delayMinutes = 10
+                                    delayMinutes = 5
                                 )
 
                             Toast.makeText(
                                 context,
-                                "Break reminder snoozed for 10 minutes",
+                                "Break reminder snoozed for 5 minutes",
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
@@ -405,7 +405,7 @@ fun HomeScreen() {
                     ) {
 
                         Text(
-                            "Snooze 10 min"
+                            "Snooze 5 min"
                         )
                     }
                 }

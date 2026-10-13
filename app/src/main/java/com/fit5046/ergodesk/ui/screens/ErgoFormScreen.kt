@@ -4,11 +4,12 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Eco
@@ -78,6 +79,9 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
         mutableStateOf(discomfortAreas.first())
     }
 
+    var assessmentDate by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
     var startTime by remember {
         mutableStateOf("09:00")
     }
@@ -138,6 +142,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
     fun resetForm() {
         jobType = jobTypes.first()
         mainDiscomfort = discomfortAreas.first()
+        assessmentDate = System.currentTimeMillis()
         startTime = "09:00"
         endTime = "17:00"
         concerns = emptySet()
@@ -150,6 +155,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
     ) {
         jobType = assessment.jobType
         mainDiscomfort = assessment.mainDiscomfortArea
+        assessmentDate = assessment.createdAt
         startTime = assessment.workStartTime
         endTime = assessment.workEndTime
         concerns = assessment.concernAreas
@@ -184,7 +190,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
 
         val assessment = ErgonomicAssessment(
             id = existing?.uid?.toLong() ?: 0L,
-            createdAt = existing?.date?.toLongOrNull() ?: System.currentTimeMillis(),
+            createdAt = assessmentDate,
             jobType = jobType,
             mainDiscomfortArea = mainDiscomfort,
             workStartTime = startTime,
@@ -194,597 +200,632 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
         )
 
         if (existing == null) {
-            assessmentViewModel.insertAssessment(assessment.toRoomAssessment())
-            message = "Saving assessment..."
+            assessmentViewModel.insertAssessment(assessment.toRoomAssessment()) { success ->
+                if (success) {
+                    resetForm()
+                    message = "Assessment saved successfully."
+                } else {
+                    message = "Failed to save assessment."
+                }
+            }
         } else {
             assessmentViewModel.updateAssessment(
                 assessment.toRoomAssessment(active = existing.isActive)
-            )
-            message = "Updating assessment..."
+            ) { success ->
+                if (success) {
+                    resetForm()
+                    message = "Assessment updated successfully."
+                } else {
+                    message = "Failed to update assessment."
+                }
+            }
         }
-
-        resetForm()
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.White)
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 100.dp)
+            .background(Color.White),
+        contentPadding = PaddingValues(bottom = 100.dp)
     ) {
-
-        ErgoFormHeader()
-
-        Column(
-            modifier = Modifier.padding(
-                horizontal = 18.dp
-            )
-        ) {
-
-            Spacer(
-                modifier = Modifier.height(18.dp)
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically
+        item { ErgoFormHeader() }
+        item {
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = 18.dp
+                )
             ) {
 
-                Icon(
-                    imageVector = Icons.Filled.Assignment,
-                    contentDescription = null,
-                    tint = ErgoGreen,
-                    modifier = Modifier.size(28.dp)
+                Spacer(
+                    modifier = Modifier.height(18.dp)
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Icon(
+                        imageVector = Icons.Filled.Assignment,
+                        contentDescription = null,
+                        tint = ErgoGreen,
+                        modifier = Modifier.size(28.dp)
+                    )
+
+                    Spacer(
+                        modifier = Modifier.width(10.dp)
+                    )
+
+                    Text(
+                        text = "Ergonomic Assessment",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Text(
+                    text = "Tell us about your work habits so ErgoDesk can personalise your experience.",
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = FormSecondaryText,
+                    modifier = Modifier.padding(
+                        start = 38.dp,
+                        top = 3.dp
+                    )
                 )
 
                 Spacer(
-                    modifier = Modifier.width(10.dp)
+                    modifier = Modifier.height(22.dp)
+                )
+
+                FormSectionTitle(
+                    number = "1",
+                    title = "About Your Work"
+                )
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
                 )
 
                 Text(
-                    text = "Ergonomic Assessment",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Text(
-                text = "Tell us about your work habits so ErgoDesk can personalise your experience.",
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                color = FormSecondaryText,
-                modifier = Modifier.padding(
-                    start = 38.dp,
-                    top = 3.dp
-                )
-            )
-
-            Spacer(
-                modifier = Modifier.height(22.dp)
-            )
-
-            FormSectionTitle(
-                number = "1",
-                title = "About Your Work"
-            )
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            Text(
-                text = "Job Type",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(
-                modifier = Modifier.height(6.dp)
-            )
-
-            Box(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            jobExpanded = true
-                        },
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        FormBorder
-                    ),
-                    color = Color.White
-                ) {
-
-                    Row(
-                        modifier = Modifier.padding(
-                            horizontal = 13.dp,
-                            vertical = 13.dp
-                        ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-
-                        Text(
-                            text = jobType,
-                            modifier = Modifier.weight(1f),
-                            fontSize = 13.sp
-                        )
-
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = FormSecondaryText
-                        )
-                    }
-                }
-
-                DropdownMenu(
-                    expanded = jobExpanded,
-                    onDismissRequest = {
-                        jobExpanded = false
-                    }
-                ) {
-
-                    jobTypes.forEach { option ->
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(option)
-                            },
-                            onClick = {
-                                jobType = option
-                                jobExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(16.dp)
-            )
-
-            Text(
-                text = "Main Area of Discomfort",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Spacer(
-                modifier = Modifier.height(6.dp)
-            )
-
-            Box(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            discomfortExpanded = true
-                        },
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        FormBorder
-                    ),
-                    color = Color.White
-                ) {
-
-                    Row(
-                        modifier = Modifier.padding(
-                            horizontal = 13.dp,
-                            vertical = 13.dp
-                        ),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-
-                        Text(
-                            text = mainDiscomfort,
-                            modifier = Modifier.weight(1f),
-                            fontSize = 13.sp
-                        )
-
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = FormSecondaryText
-                        )
-                    }
-                }
-
-                DropdownMenu(
-                    expanded = discomfortExpanded,
-                    onDismissRequest = {
-                        discomfortExpanded = false
-                    }
-                ) {
-
-                    discomfortAreas.forEach { option ->
-
-                        DropdownMenuItem(
-                            text = {
-                                Text(option)
-                            },
-                            onClick = {
-                                mainDiscomfort = option
-                                discomfortExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(24.dp)
-            )
-
-            FormSectionTitle(
-                number = "2",
-                title = "Work Hours"
-            )
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-
-                TimeField(
-                    modifier = Modifier.weight(1f),
-                    label = "Start Time",
-                    value = startTime,
-                    onClick = {
-                        showStartTimePicker = true
-                    }
+                    text = "Job Type",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
 
-                TimeField(
-                    modifier = Modifier.weight(1f),
-                    label = "End Time",
-                    value = endTime,
-                    onClick = {
-                        showEndTimePicker = true
-                    }
+                Spacer(
+                    modifier = Modifier.height(6.dp)
                 )
-            }
 
-            Spacer(
-                modifier = Modifier.height(24.dp)
-            )
-
-            FormSectionTitle(
-                number = "3",
-                title = "Areas of Concern"
-            )
-
-            Spacer(
-                modifier = Modifier.height(6.dp)
-            )
-
-            Text(
-                text = "Select all areas where you experience discomfort.",
-                fontSize = 12.sp,
-                color = FormSecondaryText
-            )
-
-            Spacer(
-                modifier = Modifier.height(8.dp)
-            )
-
-            concernOptions.chunked(2).forEach { rowOptions ->
-
-                Row(
+                Box(
                     modifier = Modifier.fillMaxWidth()
                 ) {
 
-                    rowOptions.forEach { option ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                jobExpanded = true
+                            },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            FormBorder
+                        ),
+                        color = Color.White
+                    ) {
 
                         Row(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-
-                                    concerns =
-                                        if (option in concerns) {
-                                            concerns - option
-                                        } else {
-                                            concerns + option
-                                        }
-                                },
+                            modifier = Modifier.padding(
+                                horizontal = 13.dp,
+                                vertical = 13.dp
+                            ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
 
-                            Checkbox(
-                                checked = option in concerns,
-                                onCheckedChange = { checked ->
-
-                                    concerns =
-                                        if (checked) {
-                                            concerns + option
-                                        } else {
-                                            concerns - option
-                                        }
-                                },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = ErgoGreen
-                                )
+                            Text(
+                                text = jobType,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 13.sp
                             )
 
-                            Text(
-                                text = option,
-                                fontSize = 12.sp
+                            Icon(
+                                imageVector = Icons.Filled.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = FormSecondaryText
                             )
                         }
                     }
 
-                    if (rowOptions.size == 1) {
-                        Spacer(
-                            modifier = Modifier.weight(1f)
-                        )
+                    DropdownMenu(
+                        expanded = jobExpanded,
+                        onDismissRequest = {
+                            jobExpanded = false
+                        }
+                    ) {
+
+                        jobTypes.forEach { option ->
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(option)
+                                },
+                                onClick = {
+                                    jobType = option
+                                    jobExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(
-                modifier = Modifier.height(18.dp)
-            )
-
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                color = FormSoftGreen
-            ) {
-
-                Column(
-                    modifier = Modifier.padding(14.dp)
-                ) {
-
-                    Text(
-                        text = "Personalised for you",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ErgoGreen
-                    )
-
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
-
-                    Text(
-                        text = buildPersonalisationMessage(
-                            jobType = jobType,
-                            mainDiscomfort = mainDiscomfort,
-                            concerns = concerns
-                        ),
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp,
-                        color = Color(0xFF3D463E)
-                    )
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(22.dp)
-            )
-
-            FormSectionTitle(
-                number = "4",
-                title = "Additional Notes"
-            )
-
-            Spacer(
-                modifier = Modifier.height(10.dp)
-            )
-
-            OutlinedTextField(
-                value = notes,
-                onValueChange = {
-                    notes = it
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 100.dp),
-                placeholder = {
-                    Text(
-                        text = "Anything else you would like ErgoDesk to know?",
-                        fontSize = 12.sp
-                    )
-                },
-                shape = RoundedCornerShape(8.dp)
-            )
-
-            Spacer(
-                modifier = Modifier.height(18.dp)
-            )
-
-            Button(
-                onClick = {
-                    saveAssessment()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ErgoGreen
-                ),
-                shape = RoundedCornerShape(8.dp)
-            ) {
+                Spacer(
+                    modifier = Modifier.height(16.dp)
+                )
 
                 Text(
-                    text = if (
-                        editingAssessmentId == null
-                    ) {
-                        "Save Assessment"
-                    } else {
-                        "Update Assessment"
-                    },
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "Main Area of Discomfort",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold
                 )
-            }
 
-            if (editingAssessmentId != null) {
+                Spacer(
+                    modifier = Modifier.height(6.dp)
+                )
+
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                discomfortExpanded = true
+                            },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            FormBorder
+                        ),
+                        color = Color.White
+                    ) {
+
+                        Row(
+                            modifier = Modifier.padding(
+                                horizontal = 13.dp,
+                                vertical = 13.dp
+                            ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Text(
+                                text = mainDiscomfort,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 13.sp
+                            )
+
+                            Icon(
+                                imageVector = Icons.Filled.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = FormSecondaryText
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = discomfortExpanded,
+                        onDismissRequest = {
+                            discomfortExpanded = false
+                        }
+                    ) {
+
+                        discomfortAreas.forEach { option ->
+
+                            DropdownMenuItem(
+                                text = {
+                                    Text(option)
+                                },
+                                onClick = {
+                                    mainDiscomfort = option
+                                    discomfortExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(24.dp)
+                )
+
+                FormSectionTitle(
+                    number = "2",
+                    title = "Work Hours"
+                )
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+
+                Text(text = "Assessment Date", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, FormBorder),
+                    color = Color.White
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Filled.DateRange, contentDescription = "Choose assessment date", tint = ErgoGreen)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(SimpleDateFormat("d MMM yyyy", Locale.ENGLISH).format(Date(assessmentDate)))
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+
+                    TimeField(
+                        modifier = Modifier.weight(1f),
+                        label = "Start Time",
+                        value = startTime,
+                        onClick = {
+                            showStartTimePicker = true
+                        }
+                    )
+
+                    TimeField(
+                        modifier = Modifier.weight(1f),
+                        label = "End Time",
+                        value = endTime,
+                        onClick = {
+                            showEndTimePicker = true
+                        }
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(24.dp)
+                )
+
+                FormSectionTitle(
+                    number = "3",
+                    title = "Areas of Concern"
+                )
+
+                Spacer(
+                    modifier = Modifier.height(6.dp)
+                )
+
+                Text(
+                    text = "Select all areas where you experience discomfort.",
+                    fontSize = 12.sp,
+                    color = FormSecondaryText
+                )
 
                 Spacer(
                     modifier = Modifier.height(8.dp)
                 )
 
-                TextButton(
-                    onClick = {
-                        resetForm()
-                        message = "Editing cancelled."
-                    },
-                    modifier = Modifier.fillMaxWidth()
+                concernOptions.chunked(2).forEach { rowOptions ->
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+
+                        rowOptions.forEach { option ->
+
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+
+                                        concerns =
+                                            if (option in concerns) {
+                                                concerns - option
+                                            } else {
+                                                concerns + option
+                                            }
+                                    },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+
+                                Checkbox(
+                                    checked = option in concerns,
+                                    onCheckedChange = { checked ->
+
+                                        concerns =
+                                            if (checked) {
+                                                concerns + option
+                                            } else {
+                                                concerns - option
+                                            }
+                                    },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = ErgoGreen
+                                    )
+                                )
+
+                                Text(
+                                    text = option,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+
+                        if (rowOptions.size == 1) {
+                            Spacer(
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(18.dp)
+                )
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = FormSoftGreen
                 ) {
 
-                    Text(
-                        text = "Cancel Editing",
-                        color = FormSecondaryText
-                    )
-                }
-            }
+                    Column(
+                        modifier = Modifier.padding(14.dp)
+                    ) {
 
-            message?.let { currentMessage ->
+                        Text(
+                            text = "Personalised for you",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = ErgoGreen
+                        )
+
+                        Spacer(
+                            modifier = Modifier.height(4.dp)
+                        )
+
+                        Text(
+                            text = buildPersonalisationMessage(
+                                jobType = jobType,
+                                mainDiscomfort = mainDiscomfort,
+                                concerns = concerns
+                            ),
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
+                            color = Color(0xFF3D463E)
+                        )
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(22.dp)
+                )
+
+                FormSectionTitle(
+                    number = "4",
+                    title = "Additional Notes"
+                )
 
                 Spacer(
                     modifier = Modifier.height(10.dp)
                 )
 
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = FormSoftGreen
-                ) {
-
-                    Text(
-                        text = currentMessage,
-                        modifier = Modifier.padding(12.dp),
-                        fontSize = 12.sp,
-                        color = ErgoGreen
-                    )
-                }
-            }
-
-            Spacer(
-                modifier = Modifier.height(28.dp)
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                Text(
-                    text = "Saved Assessments",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = {
+                        notes = it
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 100.dp),
+                    placeholder = {
+                        Text(
+                            text = "Anything else you would like ErgoDesk to know?",
+                            fontSize = 12.sp
+                        )
+                    },
+                    shape = RoundedCornerShape(8.dp)
                 )
 
                 Spacer(
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.height(18.dp)
                 )
 
-                Text(
-                    text = "${savedAssessments.size} saved",
-                    fontSize = 11.sp,
-                    color = FormSecondaryText
-                )
-            }
-
-            Spacer(
-                modifier = Modifier.height(6.dp)
-            )
-
-            Text(
-                text = "Select a previous assessment to view or edit it.",
-                fontSize = 12.sp,
-                color = FormSecondaryText
-            )
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            if (savedAssessments.isEmpty()) {
-
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(
-                        1.dp,
-                        FormBorder
+                Button(
+                    onClick = {
+                        saveAssessment()
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ErgoGreen
                     ),
-                    color = Color.White
+                    shape = RoundedCornerShape(8.dp)
                 ) {
 
                     Text(
-                        text = "No saved assessments yet.",
-                        modifier = Modifier.padding(16.dp),
-                        fontSize = 12.sp,
-                        color = FormSecondaryText
+                        text = if (
+                            editingAssessmentId == null
+                        ) {
+                            "Save Assessment"
+                        } else {
+                            "Update Assessment"
+                        },
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
                     )
                 }
 
-            } else {
+                if (editingAssessmentId != null) {
 
-                savedAssessments.forEach { assessment ->
-
-                    SavedAssessmentCard(
-                        assessment = assessment,
-                        selected = editingAssessmentId == assessment.id,
-                        onSelect = {
-                            loadAssessment(assessment)
-                        },
-                        onEdit = {
-                            loadAssessment(assessment)
-                        },
-                        onDelete = {
-
-                            roomAssessments.firstOrNull {
-                                it.uid.toLong() == assessment.id
-                            }?.let { assessmentViewModel.deleteAssessment(it) }
-
-                            if (
-                                editingAssessmentId ==
-                                assessment.id
-                            ) {
-                                resetForm()
-                            }
-
-                            message =
-                                "Assessment deleted."
-                        }
+                    Spacer(
+                        modifier = Modifier.height(8.dp)
                     )
+
+                    TextButton(
+                        onClick = {
+                            resetForm()
+                            message = "Editing cancelled."
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+
+                        Text(
+                            text = "Cancel Editing",
+                            color = FormSecondaryText
+                        )
+                    }
+                }
+
+                message?.let { currentMessage ->
 
                     Spacer(
                         modifier = Modifier.height(10.dp)
                     )
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = FormSoftGreen
+                    ) {
+
+                        Text(
+                            text = currentMessage,
+                            modifier = Modifier.padding(12.dp),
+                            fontSize = 12.sp,
+                            color = ErgoGreen
+                        )
+                    }
+                }
+
+                Spacer(
+                    modifier = Modifier.height(28.dp)
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Text(
+                        text = "Saved Assessments",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Text(
+                        text = "${savedAssessments.size} saved",
+                        fontSize = 11.sp,
+                        color = FormSecondaryText
+                    )
+                }
+
+                Spacer(
+                    modifier = Modifier.height(6.dp)
+                )
+
+                Text(
+                    text = "Select a previous assessment to view or edit it.",
+                    fontSize = 12.sp,
+                    color = FormSecondaryText
+                )
+
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+
+                if (savedAssessments.isEmpty()) {
+
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            FormBorder
+                        ),
+                        color = Color.White
+                    ) {
+
+                        Text(
+                            text = "No saved assessments yet.",
+                            modifier = Modifier.padding(16.dp),
+                            fontSize = 12.sp,
+                            color = FormSecondaryText
+                        )
+                    }
+
                 }
             }
-
-            Spacer(
-                modifier = Modifier.height(12.dp)
-            )
-
-            Text(
-                text = "Assessments are stored on this device.",
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
-                color = Color(0xFF8A8A8A)
-            )
-
-            Spacer(
-                modifier = Modifier.height(20.dp)
-            )
         }
+        items(savedAssessments, key = { it.id }) { assessment ->
+            Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                SavedAssessmentCard(
+                    assessment = assessment,
+                    selected = editingAssessmentId == assessment.id,
+                    onSelect = { loadAssessment(assessment) },
+                    onEdit = { loadAssessment(assessment) },
+                    onDelete = {
+                        roomAssessments.firstOrNull { it.uid.toLong() == assessment.id }?.let {
+                            assessmentViewModel.deleteAssessment(it) { success ->
+                                if (success) {
+                                    if (editingAssessmentId == assessment.id) resetForm()
+                                    message = "Assessment deleted successfully."
+                                } else {
+                                    message = "Failed to delete assessment."
+                                }
+                            }
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+        }
+        item {
+            Column(modifier = Modifier.padding(horizontal = 18.dp)) {
+                Spacer(
+                    modifier = Modifier.height(12.dp)
+                )
+
+                Text(
+                    text = "Assessments are stored on this device.",
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp,
+                    color = Color(0xFF8A8A8A)
+                )
+
+                Spacer(
+                    modifier = Modifier.height(20.dp)
+                )
+            }
+        }
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = assessmentDate)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { assessmentDate = it }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) { DatePicker(state = datePickerState) }
     }
 
     if (showStartTimePicker) {
