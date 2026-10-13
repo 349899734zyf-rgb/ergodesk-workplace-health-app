@@ -74,36 +74,68 @@ object PostureClassifier {
 
     /*
      * Length of the sitting bout the samples end in, in
-     * seconds; 0 if the user is on a break.
-     *
-     * Only minBreakSeconds of continuous standing or moving
-     * ends a bout, so shifting in the chair or standing up
-     * for a few seconds does not reset the timer. If the
-     * bout started before the first sample, the result is
-     * capped at the window length.
+     * seconds; 0 if the user is on a break. If the bout
+     * started before the first sample, the result is capped
+     * at the window length.
      */
     fun sittingBoutSeconds(
         samples: List<MotionSample>,
-        minBreakSeconds: Int = 60
+        minBreakSeconds: Int = SittingBoutTracker.DEFAULT_MIN_BREAK_SECONDS
     ): Int {
 
-        var boutStart: Int? = null
-        var nonSittingRun = 0
+        val tracker =
+            SittingBoutTracker(minBreakSeconds)
 
-        samples.forEachIndexed { index, sample ->
-            if (classify(sample) == PostureState.SITTING) {
-                if (boutStart == null) {
-                    boutStart = index
-                }
-                nonSittingRun = 0
-            } else {
-                nonSittingRun++
-                if (nonSittingRun >= minBreakSeconds) {
-                    boutStart = null
-                }
+        return samples.fold(0) { _, sample -> tracker.add(sample) }
+    }
+}
+
+/*
+ * Follows the current sitting bout one 1-second sample at
+ * a time, so a live sensor stream can update it without
+ * re-reading history.
+ *
+ * Only minBreakSeconds of continuous standing or moving
+ * ends a bout, so shifting in the chair or standing up
+ * for a few seconds does not reset the timer.
+ */
+class SittingBoutTracker(
+    private val minBreakSeconds: Int = DEFAULT_MIN_BREAK_SECONDS
+) {
+
+    private var boutSeconds = 0
+    private var inBout = false
+    private var nonSittingRun = 0
+
+    /*
+     * Returns the bout length in seconds after this sample.
+     */
+    fun add(
+        sample: MotionSample
+    ): Int {
+
+        if (PostureClassifier.classify(sample) == PostureState.SITTING) {
+            inBout = true
+            nonSittingRun = 0
+        } else {
+            nonSittingRun++
+            if (nonSittingRun >= minBreakSeconds) {
+                inBout = false
             }
         }
 
-        return boutStart?.let { samples.size - it } ?: 0
+        boutSeconds =
+            if (inBout) boutSeconds + 1 else 0
+
+        return boutSeconds
+    }
+
+    companion object {
+
+        const val DEFAULT_MIN_BREAK_SECONDS = 60
+
+        // Long enough to see the start of a bout that runs
+        // well past the relaxed 45-minute interval.
+        const val LOOKBACK_MILLIS = 2 * 60 * 60 * 1000L
     }
 }

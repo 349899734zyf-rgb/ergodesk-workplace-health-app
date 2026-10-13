@@ -8,13 +8,12 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
-import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
-import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.context.ContextInput
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
+import com.fit5046.ergodesk.data.sensor.SittingBoutTracker
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -39,23 +38,17 @@ class ContextEvaluationWorker(
 
         val samples =
             SensorDataSimulator.fromAssets(applicationContext)
-                .samplesBetween(now - LOOKBACK_MILLIS, now)
+                .samplesBetween(now - SittingBoutTracker.LOOKBACK_MILLIS, now)
 
         val sittingBoutMinutes =
             PostureClassifier.sittingBoutSeconds(samples) / 60
 
-        val today =
-            AnalyticsCalculator.periodRange(AnalyticsPeriod.DAILY, now)
-
-        val historyStart =
-            Calendar.getInstance().apply {
-                timeInMillis = today.startMillis
-                add(Calendar.DAY_OF_YEAR, -COMPLIANCE_DAYS)
-            }.timeInMillis
+        val window =
+            ContextEngine.complianceWindow(now)
 
         val history =
             RepositoryProvider.activityRepository
-                .observeRecordsBetween(historyStart, today.startMillis)
+                .observeRecordsBetween(window.startMillis, window.endMillis)
                 .first()
 
         val decision =
@@ -107,12 +100,6 @@ class ContextEvaluationWorker(
         private const val WORK_NAME = "context_evaluation"
 
         private const val PERIOD_MINUTES = 15L
-
-        // Long enough to see the start of a bout that runs
-        // well past the relaxed 45-minute interval.
-        private const val LOOKBACK_MILLIS = 2 * 60 * 60 * 1000L
-
-        private const val COMPLIANCE_DAYS = 7
 
         /*
          * Safe to call on every app start: KEEP leaves an

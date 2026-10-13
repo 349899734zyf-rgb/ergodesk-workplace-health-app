@@ -6,6 +6,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Calendar
 
 class ContextEngineTest {
 
@@ -107,6 +108,19 @@ class ContextEngineTest {
         )
 
         assertEquals(0.5f, ContextEngine.complianceRate(history)!!, 0.0001f)
+    }
+
+    @Test
+    fun complianceWindow_isSevenFullDaysBeforeToday() {
+        fun millis(day: Int, hour: Int) = Calendar.getInstance().apply {
+            clear()
+            set(2026, Calendar.OCTOBER, day, hour, 0, 0)
+        }.timeInMillis
+
+        val window = ContextEngine.complianceWindow(millis(14, 15))
+
+        assertEquals(millis(7, 0), window.startMillis)
+        assertEquals(millis(14, 0), window.endMillis)
     }
 
     @Test

@@ -71,6 +71,18 @@ class PostureClassifierTest {
     }
 
     @Test
+    fun tracker_matchesBatchResult_sampleBySample() {
+        val samples = sitting(100) + walking(20) + sitting(50) + walking(70) + sitting(30)
+        val tracker = SittingBoutTracker()
+
+        val live = samples.map { tracker.add(it) }
+
+        assertEquals(170, live[169])
+        assertEquals(0, live[239])
+        assertEquals(PostureClassifier.sittingBoutSeconds(samples), live.last())
+    }
+
+    @Test
     fun sittingBout_onBreakNow_isZero() {
         assertEquals(0, PostureClassifier.sittingBoutSeconds(sitting(100) + walking(90)))
         assertEquals(0, PostureClassifier.sittingBoutSeconds(emptyList()))

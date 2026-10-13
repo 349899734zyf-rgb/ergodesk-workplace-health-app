@@ -1,6 +1,10 @@
 package com.fit5046.ergodesk.data.context
 
+import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
+import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
+import com.fit5046.ergodesk.data.analytics.PeriodRange
 import com.fit5046.ergodesk.data.model.ActivityRecord
+import java.util.Calendar
 
 enum class ReminderStyle {
     STANDARD,
@@ -72,6 +76,8 @@ object ContextEngine {
 
     const val LOW_COMPLIANCE = 0.4f
     const val HIGH_COMPLIANCE = 0.8f
+
+    const val COMPLIANCE_DAYS = 7
 
     // TODO(merge with Settings): read the user's quiet hours.
     val DEFAULT_QUIET_HOURS = QuietHours(startHour = 22, endHour = 7)
@@ -171,9 +177,31 @@ object ContextEngine {
     }
 
     /*
-     * Breaks taken / breaks planned over the given days.
-     * Uses past days rather than today, so compliance is
-     * not 0% every morning before the first break.
+     * The COMPLIANCE_DAYS full days before today. Past days
+     * rather than today, so compliance is not 0% every
+     * morning before the first break.
+     */
+    fun complianceWindow(
+        nowMillis: Long
+    ): PeriodRange {
+
+        val today =
+            AnalyticsCalculator.periodRange(AnalyticsPeriod.DAILY, nowMillis)
+
+        val start =
+            Calendar.getInstance().apply {
+                timeInMillis = today.startMillis
+                add(Calendar.DAY_OF_YEAR, -COMPLIANCE_DAYS)
+            }
+
+        return PeriodRange(
+            startMillis = start.timeInMillis,
+            endMillis = today.startMillis
+        )
+    }
+
+    /*
+     * Breaks taken / breaks planned over the given records.
      */
     fun complianceRate(
         history: List<ActivityRecord>

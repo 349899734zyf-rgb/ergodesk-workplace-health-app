@@ -9,8 +9,9 @@ package com.fit5046.ergodesk.ui.screens
  * The bottom NavigationBar is app-wide (ErgoDeskBottomNavBar).
  * Route object is Screen.Dashboard ("dashboard"); the team label is "Home".
  *
- * A4: replace the hard-coded state with a ViewModel reading ActivityRecord
- * from Room plus live context sources.
+ * A4: live posture, sitting bout, break interval and today's totals come
+ * from HomeViewModel. The context card and timeline are still samples
+ * until weather and ActivitySession data exist.
  */
 
 import android.widget.Toast
@@ -35,11 +36,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
+import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
+import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
+import com.fit5046.ergodesk.data.sensor.PostureState
+import com.fit5046.ergodesk.ui.home.HomeUiState
+import com.fit5046.ergodesk.ui.home.HomeViewModel
 import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
 
-/* Sample data — replaced by Room / ViewModel in A4. */
+/* Sample timeline — replaced once Room stores ActivitySession rows. */
 
 data class TimelineEvent(
     val time: String,
@@ -82,19 +90,28 @@ private val sampleTimeline = listOf(
 )
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    viewModel: HomeViewModel = viewModel()
+) {
+
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    HomeContent(state)
+}
+
+@Composable
+private fun HomeContent(
+    state: HomeUiState
+) {
 
     val context = LocalContext.current
 
-    // Prototype: hard-coded state; A4 supplies this from a ViewModel.
-    // 30-min break baseline matches the Settings slider default and the report.
-    val breakThresholdMinutes = 30
-    val currentSittingMinutes = 22
-    val sittingProgress =
-        currentSittingMinutes / breakThresholdMinutes.toFloat()
-
-    val breaksCompleted = 5
-    val breaksGoal = 8
+    val todayLabel = remember {
+        AnalyticsCalculator.formatPeriodLabel(
+            System.currentTimeMillis(),
+            AnalyticsPeriod.DAILY
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -138,7 +155,7 @@ fun HomeScreen() {
                     }
 
                     Text(
-                        "Tue, 8 Sep 2026",
+                        todayLabel,
                         fontSize = 13.sp,
                         color = ErgoMutedText,
                         modifier = Modifier.padding(
@@ -171,7 +188,7 @@ fun HomeScreen() {
 
                             CircularProgressIndicator(
                                 progress = {
-                                    sittingProgress
+                                    state.sittingProgress
                                 },
                                 modifier = Modifier.size(168.dp),
                                 strokeWidth = 12.dp,
@@ -185,7 +202,7 @@ fun HomeScreen() {
                             ) {
 
                                 Text(
-                                    "$currentSittingMinutes",
+                                    "${state.sittingBoutMinutes}",
                                     fontSize = 46.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = ErgoGreen
@@ -205,8 +222,17 @@ fun HomeScreen() {
                         )
 
                         Text(
-                            "Next break in " +
-                                    "${breakThresholdMinutes - currentSittingMinutes} minutes",
+                            "Now: ${state.postureLabel}",
+                            fontSize = 13.sp,
+                            color = ErgoMutedText
+                        )
+
+                        Spacer(
+                            Modifier.height(4.dp)
+                        )
+
+                        Text(
+                            state.statusText,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = ErgoGreen
@@ -286,13 +312,15 @@ fun HomeScreen() {
                 ) {
 
                     StatCard(
-                        "6 h 20 m",
+                        AnalyticsCalculator.formatMinutes(
+                            state.sittingTodayMinutes
+                        ),
                         "Sitting today",
                         Modifier.weight(1f)
                     )
 
                     StatCard(
-                        "$breaksCompleted / $breaksGoal",
+                        "${state.breaksCompleted} / ${state.breakTarget}",
                         "Breaks completed",
                         Modifier.weight(1f)
                     )
@@ -324,7 +352,7 @@ fun HomeScreen() {
                         )
 
                         Text(
-                            "$breaksCompleted of $breaksGoal breaks",
+                            "${state.breaksCompleted} of ${state.breakTarget} breaks",
                             style =
                                 MaterialTheme.typography.labelLarge,
                             color = ErgoGreen
@@ -337,8 +365,7 @@ fun HomeScreen() {
 
                     LinearProgressIndicator(
                         progress = {
-                            breaksCompleted /
-                                    breaksGoal.toFloat()
+                            state.breakProgress
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -572,6 +599,13 @@ private fun TimelineRow(
 private fun HomeScreenPreview() {
 
     ErgoDeskTheme {
-        HomeScreen()
+        HomeContent(
+            HomeUiState(
+                posture = PostureState.SITTING,
+                sittingBoutMinutes = 22,
+                sittingTodayMinutes = 380,
+                breaksCompleted = 5
+            )
+        )
     }
 }

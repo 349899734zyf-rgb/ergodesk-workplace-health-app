@@ -1,5 +1,8 @@
 package com.fit5046.ergodesk.data.sensor
 
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -56,6 +59,19 @@ class SensorDataSimulatorTest {
         val simulator = SensorDataSimulator(timeline)
 
         assertEquals(0, simulator.samplesBetween(5_000L, 5_000L).size)
+    }
+
+    @Test
+    fun liveSamples_continuesWhereHistoryEnds() = runBlocking {
+        val simulator = SensorDataSimulator(timeline)
+        val from = 1_500L
+
+        val history = simulator.samplesBetween(from - 2_000L, from)
+        val live = simulator.liveSamples(from, clock = { 10_000L }).take(3).toList()
+
+        // History covers seconds 0 and 1, live starts at second 2.
+        assertEquals(listOf(0, 1), history.map { it.pitch.toInt() })
+        assertEquals(listOf(2, 0, 1), live.map { it.pitch.toInt() })
     }
 
     @Test
