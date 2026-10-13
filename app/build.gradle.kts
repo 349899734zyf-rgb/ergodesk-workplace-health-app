@@ -59,6 +59,9 @@ dependencies {
     // Icons used by the ErgoDesk skeleton
     implementation("androidx.compose.material:material-icons-extended:1.6.7")
 
+    // Background sensing and context evaluation
+    implementation(libs.androidx.work.runtime.ktx)
+
     // Unit testing
     testImplementation(libs.junit)
 
