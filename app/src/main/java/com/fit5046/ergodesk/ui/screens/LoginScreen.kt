@@ -16,16 +16,62 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.runtime.*
 
+//Email Validation
+import android.util.Patterns
+
+//Google Sign-In Result Handling
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+
+//Firebase and Google Authentication
+import com.fit5046.ergodesk.R
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
+
 @Composable
 fun LoginScreen(
     onNavigateToSignUp: () -> Unit = {},
     onLoginSuccess: () -> Unit = {}
 ) {
-    var username by remember {mutableStateOf("")}
+    var email by remember {mutableStateOf("")}
     var password by remember {mutableStateOf("")}
     var isPasswordVisible by remember {mutableStateOf(false)}
+    var isLoading by remember {mutableStateOf(false)}
+    var errorMessage by remember {mutableStateOf("")}
 
     val context = LocalContext.current
+    val auth = remember {FirebaseAuth.getInstance()}
+
+    val googleSignInClient = remember(context) {
+        val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(context.getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+        GoogleSignIn.getClient(context, options)
+    }
+
+    val googleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {result ->
+        try {
+            val account = GoogleSignIn.getSignedInAccountFromIntent(result.data).getResult(ApiException::class.java)
+            val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+
+            auth.signInWithCredential(credential).addOnCompleteListener { task ->
+                isLoading = false
+                if (task.isSuccessful) {
+                    Toast.makeText(context, "Login Successful!", Toast.LENGTH_SHORT).show()
+                    onLoginSuccess()
+                } else {
+                    errorMessage = "Google login failed!"
+                }
+            }
+        } catch (error: Exception) {
+            isLoading = false
+            errorMessage = "Google Sign-In cancelled or failed!"
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -42,15 +88,17 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            //Username or Email Field
+            //Email Field
             OutlinedTextField(
-                value = username,
-                onValueChange = {username = it},
-                label = {Text("Username or Email")},
+                value = email,
+                onValueChange = {
+                    email = it
+                    errorMessage = ""},
+                label = {Text("Email")},
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Person,
-                        contentDescription = "Username Icon"
+                        contentDescription = "Email Icon"
                     )
                 },
                 singleLine = true,
@@ -62,7 +110,8 @@ fun LoginScreen(
             //Password Field
             OutlinedTextField(
                 value = password,
-                onValueChange = {password = it},
+                onValueChange = {password = it
+                    errorMessage = ""},
                 label = {Text("Password")},
                 leadingIcon = {
                     Icon(
@@ -83,20 +132,73 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
 
+            //Error Message
+            if (errorMessage.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = errorMessage,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
             //Login Button
             Button(
                 onClick = {
-                    if (username.isBlank() || password.isBlank()) {
-                        Toast.makeText(context, "Please enter both username and password!", Toast.LENGTH_SHORT).show()
-                    } else {
-                        Toast.makeText(context, "Login Successful!", Toast.LENGTH_SHORT).show()
-                        onLoginSuccess()
+                    when {
+                        email.isBlank() || password.isBlank() -> {
+                            errorMessage = "Please enter both email and password!"
+                        }
+                        !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> {
+                            errorMessage = "Please enter a valid email address!"
+                        }
+
+                        else -> {
+                            isLoading = true
+                            errorMessage = ""
+
+                            auth.signInWithEmailAndPassword(
+                                email.trim(),
+                                password
+                            ).addOnCompleteListener {task -> isLoading = false
+                                if (task.isSuccessful) {
+                                    Toast.makeText(context, "Login Successful!", Toast.LENGTH_SHORT).show()
+                                    onLoginSuccess()
+                                } else {
+                                    errorMessage = "Login Failed! Check your email and password!"
+                                }
+                            }
+                        }
                     }
                 },
+                enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth().height(50.dp)
             ) {Text("Login")}
 
             Spacer(modifier = Modifier.height(20.dp))
+
+            //Google Login Button
+            OutlinedButton(
+                onClick = {
+                    isLoading = true
+                    errorMessage = ""
+
+                    googleSignInClient.signOut().addOnCompleteListener {
+                        googleLauncher.launch(googleSignInClient.signInIntent)
+                    }
+                },
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth().height(50.dp)
+            ) {
+                Text("Continue with Google")
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            //Loading Indicator
+            if (isLoading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                CircularProgressIndicator()
+            }
 
             //Navigation to Sign Up
             TextButton(onClick = onNavigateToSignUp) {

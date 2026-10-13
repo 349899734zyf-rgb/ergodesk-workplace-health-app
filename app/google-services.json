@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "969866668969",
+    "project_id": "sit313-task-7-1p-372c1",
+    "storage_bucket": "sit313-task-7-1p-372c1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:969866668969:android:77762e8540acd339ad72b8",
+        "android_client_info": {
+          "package_name": "com.fit5046.ergodesk"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "969866668969-u6gjqpff581178ud4uqb145v89b0f8e4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.fit5046.ergodesk",
+            "certificate_hash": "644993ec516afec95d6662a288587fb66cd360c1"
+          }
+        },
+        {
+          "client_id": "969866668969-968m41v90qbmtrmmonuphigagjmo5gkf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCObggWJ9DkE3uEih54XQhSDLWmOUf5Zg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "969866668969-968m41v90qbmtrmmonuphigagjmo5gkf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
