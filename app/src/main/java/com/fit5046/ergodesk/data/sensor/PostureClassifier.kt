@@ -71,4 +71,39 @@ object PostureClassifier {
             movingSeconds = states.count { it == PostureState.MOVING }
         )
     }
+
+    /*
+     * Length of the sitting bout the samples end in, in
+     * seconds; 0 if the user is on a break.
+     *
+     * Only minBreakSeconds of continuous standing or moving
+     * ends a bout, so shifting in the chair or standing up
+     * for a few seconds does not reset the timer. If the
+     * bout started before the first sample, the result is
+     * capped at the window length.
+     */
+    fun sittingBoutSeconds(
+        samples: List<MotionSample>,
+        minBreakSeconds: Int = 60
+    ): Int {
+
+        var boutStart: Int? = null
+        var nonSittingRun = 0
+
+        samples.forEachIndexed { index, sample ->
+            if (classify(sample) == PostureState.SITTING) {
+                if (boutStart == null) {
+                    boutStart = index
+                }
+                nonSittingRun = 0
+            } else {
+                nonSittingRun++
+                if (nonSittingRun >= minBreakSeconds) {
+                    boutStart = null
+                }
+            }
+        }
+
+        return boutStart?.let { samples.size - it } ?: 0
+    }
 }

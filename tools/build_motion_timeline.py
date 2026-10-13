@@ -11,7 +11,7 @@ Kaggle and save them flat in tools/motionsense_raw/ as
 
 This script cuts every file into 1-second windows (50 samples), keeps two
 features per window and stitches segments into one labelled timeline that
-SensorDataSimulator replays in the app:
+SensorDataSimulator replays (and loops) in the app:
 
     pitch          mean attitude.pitch (rad), roughly the thigh angle
     accMagnitude   mean |userAcceleration| (g), how much the body moves
@@ -38,16 +38,21 @@ LABELS = {
     "jog_9": "MOVING",
 }
 
-# (raw file, first second, last second exclusive) in playback order.
-# A desk-work story: sit, walk to the kitchen, stand, sit again, a short
-# jog, then stand. Uses every second of the four files once.
+# (raw file, first second, length in seconds) in playback order. A segment
+# longer than its file wraps around to the file's start, so the 205-second
+# sitting recording can fill a realistic desk bout.
+# The story: sit past the 30-minute threshold, walk, stand, a shorter sit,
+# a jog, then a long sit that passes even the relaxed 45-minute interval.
 SEGMENTS = [
-    ("sit_5_sub_1.csv", 0, 120),
+    ("sit_5_sub_1.csv", 0, 35 * 60),
     ("wlk_7_sub_1.csv", 0, 108),
-    ("std_6_sub_1.csv", 0, 100),
-    ("sit_5_sub_1.csv", 120, 205),
+    ("std_6_sub_1.csv", 0, 203),
+    ("sit_5_sub_1.csv", 0, 20 * 60),
     ("jog_9_sub_1.csv", 0, 97),
-    ("std_6_sub_1.csv", 100, 203),
+    ("std_6_sub_1.csv", 0, 100),
+    ("sit_5_sub_1.csv", 0, 50 * 60),
+    ("wlk_7_sub_1.csv", 0, 108),
+    ("std_6_sub_1.csv", 100, 103),
 ]
 
 
@@ -71,11 +76,13 @@ def main():
     cache = {}
     timeline = []
 
-    for name, first, last in SEGMENTS:
+    for name, first, length in SEGMENTS:
         if name not in cache:
             cache[name] = one_second_windows(RAW_DIR / name)
+        windows = cache[name]
         label = LABELS[name.rsplit("_", 2)[0]]
-        for pitch, acc in cache[name][first:last]:
+        for offset in range(length):
+            pitch, acc = windows[(first + offset) % len(windows)]
             timeline.append((pitch, acc, label))
 
     OUT_FILE.parent.mkdir(parents=True, exist_ok=True)
