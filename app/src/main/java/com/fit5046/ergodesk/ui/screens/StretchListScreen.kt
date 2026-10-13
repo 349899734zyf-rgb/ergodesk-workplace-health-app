@@ -51,11 +51,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fit5046.ergodesk.data.model.StretchItemEntity
+import com.fit5046.ergodesk.ui.viewmodel.StretchViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -172,21 +176,15 @@ object StretchDataProvider {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun StretchListScreen(
-    onStretchClick: (String) -> Unit
+    onStretchClick: (String) -> Unit,
+    viewModel: StretchViewModel = viewModel()
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("All") }
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val filteredList by viewModel.filteredStretches.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
 
     val categories = listOf("All", "Neck", "Shoulders", "Lower back", "Wrists", "Chest", "Legs")
-
-    // Real-time search & category filter
-    val filteredList = StretchDataProvider.items.filter { item ->
-        val matchesCategory = (selectedCategory == "All") || item.targetArea.equals(selectedCategory, ignoreCase = true)
-        val matchesQuery = item.title.contains(searchQuery, ignoreCase = true) ||
-                item.targetArea.contains(searchQuery, ignoreCase = true)
-        matchesCategory && matchesQuery
-    }
 
     Box(
         modifier = Modifier
@@ -246,7 +244,7 @@ fun StretchListScreen(
                 // ---------------------------------------------------------
                 OutlinedTextField(
                     value = searchQuery,
-                    onValueChange = { searchQuery = it },
+                    onValueChange = { viewModel.onSearchQueryChanged(it) },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Search by routine or body part...", fontSize = 13.sp, color = ErgoTextSecondary) },
                     leadingIcon = {
@@ -259,7 +257,7 @@ fun StretchListScreen(
                     },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { searchQuery = "" }) {
+                            IconButton(onClick = { viewModel.onSearchQueryChanged("") }) {
                                 Icon(Icons.Default.Clear, contentDescription = "Clear", tint = ErgoTextSecondary)
                             }
                         }
@@ -287,7 +285,7 @@ fun StretchListScreen(
                         val isSelected = category == selectedCategory
                         FilterChip(
                             selected = isSelected,
-                            onClick = { selectedCategory = category },
+                            onClick = { viewModel.onCategorySelected(category) },
                             label = {
                                 Text(
                                     text = category,
@@ -324,7 +322,7 @@ fun StretchListScreen(
                     items(filteredList, key = { it.id }) { stretch ->
                         StretchCard(
                             item = stretch,
-                            onClick = { onStretchClick(stretch.id) }
+                            onClick = { onStretchClick(stretch.id.toString()) }
                         )
                     }
                 }
@@ -467,19 +465,14 @@ fun StretchListScreen(
                             val totalSecs = (mins * 60 + secs).coerceAtLeast(10)
                             val holdSeconds = (totalSecs / 2).coerceAtLeast(5)
 
-                            StretchDataProvider.items.add(
-                                0,
-                                StretchItem(
-                                    id = (StretchDataProvider.items.size + 1).toString(),
-                                    title = newTitle.trim(),
-                                    targetArea = newArea,
-                                    durationSeconds = totalSecs,
-                                    difficulty = "Custom",
-                                    instructions = listOf(
-                                        "Position yourself comfortably with your back straight and relaxed shoulders.",
-                                        "Perform gentle, controlled movements focusing directly on your $newArea.",
-                                        "Breathe steadily and hold the stretch for $holdSeconds seconds per side."
-                                    )
+                            viewModel.addCustomStretch(
+                                title = newTitle.trim(),
+                                targetArea = newArea,
+                                durationSeconds = totalSecs,
+                                instructions = listOf(
+                                    "Position yourself comfortably with your back straight and relaxed shoulders.",
+                                    "Perform gentle, controlled movements focusing directly on your $newArea.",
+                                    "Breathe steadily and hold the stretch for $holdSeconds seconds per side."
                                 )
                             )
                         }
@@ -565,7 +558,7 @@ private fun StretchListHeader() {
  */
 @Composable
 private fun StretchCard(
-    item: StretchItem,
+    item: StretchItemEntity,
     onClick: () -> Unit
 ) {
     Surface(
