@@ -14,3 +14,6 @@
 .cxx
 local.properties
 .idea/
+
+# Raw MotionSense CSVs (download from Kaggle, see tools/build_motion_timeline.py)
+/tools/motionsense_raw/
