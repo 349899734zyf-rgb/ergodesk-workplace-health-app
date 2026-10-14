@@ -54,7 +54,8 @@ dependencies {
     // AndroidX
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     // ErgoDesk shared skeleton navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
@@ -71,6 +72,9 @@ dependencies {
 
     // Icons used by the ErgoDesk skeleton
     implementation("androidx.compose.material:material-icons-extended:1.6.7")
+
+    // Background sensing and context evaluation
+    implementation(libs.androidx.work.runtime.ktx)
 
     // Unit testing
     testImplementation(libs.junit)
