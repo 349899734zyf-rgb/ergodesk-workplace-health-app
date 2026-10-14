@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,16 +41,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
+import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
+import com.fit5046.ergodesk.data.analytics.ChartData
 import com.fit5046.ergodesk.data.model.ActivityRecord
-import com.fit5046.ergodesk.data.repository.AnalyticsRepository
+import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
 import com.fit5046.ergodesk.ui.theme.ErgoGreenLight
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 private val SittingPink = Color(0xFFF4B7B7)
 private val SittingBackground = Color(0xFFFFF1F1)
@@ -59,18 +57,6 @@ private val BreakBackground = Color(0xFFEAF7FA)
 private val InsightBackground = Color(0xFFEAF7E4)
 private val SelectorBackground = Color(0xFFF5F6F7)
 private val SecondaryText = Color(0xFF666B66)
-
-private enum class AnalyticsPeriod {
-    DAILY,
-    WEEKLY,
-    MONTHLY
-}
-
-private data class ChartData(
-    val sittingValues: List<Float>,
-    val activeValues: List<Float>,
-    val labels: List<String>
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,91 +79,73 @@ fun AnalyticsScreen() {
     )
 
     /*
-     * The UI does not contain separate hard-coded Daily,
-     * Weekly or Monthly totals.
-     *
-     * Records are selected from the prototype repository
-     * according to the selected period.
+     * Records come from ActivityRepository (prototype data
+     * until Room is merged). Each Flow is re-created when
+     * the selected period or date changes.
      */
-    val currentRecords = remember(
-        selectedPeriod,
-        selectedDateMillis
-    ) {
-        getRecordsForPeriod(
-            period = selectedPeriod,
-            selectedDateMillis = selectedDateMillis
-        )
+    val repository = RepositoryProvider.activityRepository
+
+    val currentRange = remember(selectedPeriod, selectedDateMillis) {
+        AnalyticsCalculator.periodRange(selectedPeriod, selectedDateMillis)
     }
 
-    val previousRecords = remember(
-        selectedPeriod,
-        selectedDateMillis
-    ) {
-        getPreviousRecordsForPeriod(
-            period = selectedPeriod,
-            selectedDateMillis = selectedDateMillis
-        )
+    val previousRange = remember(selectedPeriod, selectedDateMillis) {
+        AnalyticsCalculator.previousPeriodRange(selectedPeriod, selectedDateMillis)
     }
+
+    // Daily view shows the whole selected week in "Weekly Progress".
+    val weekRange = remember(selectedDateMillis) {
+        AnalyticsCalculator.periodRange(AnalyticsPeriod.WEEKLY, selectedDateMillis)
+    }
+
+    val currentRecords by remember(currentRange) {
+        repository.observeRecordsBetween(currentRange.startMillis, currentRange.endMillis)
+    }.collectAsState(initial = emptyList())
+
+    val previousRecords by remember(previousRange) {
+        repository.observeRecordsBetween(previousRange.startMillis, previousRange.endMillis)
+    }.collectAsState(initial = emptyList())
+
+    val weekRecords by remember(weekRange) {
+        repository.observeRecordsBetween(weekRange.startMillis, weekRange.endMillis)
+    }.collectAsState(initial = emptyList())
 
     /*
      * All summary values are calculated from the records.
      */
-    val sittingMinutes = currentRecords.sumOf {
-        it.sittingMinutes
-    }
+    val current = AnalyticsCalculator.summarize(currentRecords)
+    val previous = AnalyticsCalculator.summarize(previousRecords)
 
-    val activeMinutes = currentRecords.sumOf {
-        it.activeMinutes
-    }
+    val sittingMinutes = current.sittingMinutes
+    val activeMinutes = current.activeMinutes
+    val breaksCompleted = current.breaksCompleted
+    val breakTarget = current.breakTarget
 
-    val breaksCompleted = currentRecords.sumOf {
-        it.breaksCompleted
-    }
-
-    val breakTarget = currentRecords.sumOf {
-        it.breakTarget
-    }
-
-    val previousSittingMinutes = previousRecords.sumOf {
-        it.sittingMinutes
-    }
-
-    val previousActiveMinutes = previousRecords.sumOf {
-        it.activeMinutes
-    }
-
-    val previousBreaksCompleted = previousRecords.sumOf {
-        it.breaksCompleted
-    }
-
-    val sittingChange = calculatePercentageChange(
+    val sittingChange = AnalyticsCalculator.percentageChange(
         current = sittingMinutes,
-        previous = previousSittingMinutes
+        previous = previous.sittingMinutes
     )
 
-    val activeChange = calculatePercentageChange(
+    val activeChange = AnalyticsCalculator.percentageChange(
         current = activeMinutes,
-        previous = previousActiveMinutes
+        previous = previous.activeMinutes
     )
 
     val breaksChange =
-        breaksCompleted - previousBreaksCompleted
+        breaksCompleted - previous.breaksCompleted
 
-    val chartData = buildChartData(
+    val chartData = AnalyticsCalculator.buildChartData(
         period = selectedPeriod,
         records = currentRecords
     )
 
-    val dateLabel = formatPeriodLabel(
+    val dateLabel = AnalyticsCalculator.formatPeriodLabel(
         millis = selectedDateMillis,
         period = selectedPeriod
     )
 
-    val comparisonLabel = when (selectedPeriod) {
-        AnalyticsPeriod.DAILY -> "vs yesterday"
-        AnalyticsPeriod.WEEKLY -> "vs last week"
-        AnalyticsPeriod.MONTHLY -> "vs last month"
-    }
+    val comparisonLabel =
+        AnalyticsCalculator.comparisonLabel(selectedPeriod)
 
     Column(
         modifier = Modifier
@@ -315,8 +283,8 @@ fun AnalyticsScreen() {
                     icon = Icons.Filled.Chair,
                     background = SittingBackground,
                     title = "Sitting Time",
-                    value = formatMinutes(sittingMinutes),
-                    comparison = formatPercentageChange(sittingChange),
+                    value = AnalyticsCalculator.formatMinutes(sittingMinutes),
+                    comparison = AnalyticsCalculator.formatPercentageChange(sittingChange),
                     comparisonLabel = comparisonLabel,
                     lowerIsBetter = true
                 )
@@ -326,8 +294,8 @@ fun AnalyticsScreen() {
                     icon = Icons.Filled.DirectionsWalk,
                     background = ActiveBackground,
                     title = "Active Time",
-                    value = formatMinutes(activeMinutes),
-                    comparison = formatPercentageChange(activeChange),
+                    value = AnalyticsCalculator.formatMinutes(activeMinutes),
+                    comparison = AnalyticsCalculator.formatPercentageChange(activeChange),
                     comparisonLabel = comparisonLabel,
                     lowerIsBetter = false
                 )
@@ -338,7 +306,7 @@ fun AnalyticsScreen() {
                     background = BreakBackground,
                     title = "Breaks\nCompleted",
                     value = "$breaksCompleted / $breakTarget",
-                    comparison = formatNumberChange(breaksChange),
+                    comparison = AnalyticsCalculator.formatNumberChange(breaksChange),
                     comparisonLabel = comparisonLabel,
                     lowerIsBetter = false
                 )
@@ -391,7 +359,7 @@ fun AnalyticsScreen() {
             )
 
             InsightCard(
-                text = createInsight(
+                text = AnalyticsCalculator.createInsight(
                     sittingChange = sittingChange,
                     activeChange = activeChange,
                     breaksCompleted = breaksCompleted,
@@ -424,8 +392,8 @@ fun AnalyticsScreen() {
 
             BreakProgressSection(
                 period = selectedPeriod,
-                selectedDateMillis = selectedDateMillis,
-                currentRecords = currentRecords
+                currentRecords = currentRecords,
+                weekRecords = weekRecords
             )
 
             Spacer(
@@ -976,8 +944,8 @@ private fun InsightCard(
 @Composable
 private fun BreakProgressSection(
     period: AnalyticsPeriod,
-    selectedDateMillis: Long,
-    currentRecords: List<ActivityRecord>
+    currentRecords: List<ActivityRecord>,
+    weekRecords: List<ActivityRecord>
 ) {
 
     /*
@@ -993,9 +961,7 @@ private fun BreakProgressSection(
             val records = if (
                 period == AnalyticsPeriod.DAILY
             ) {
-                AnalyticsRepository.getWeeklyRecords(
-                    selectedDateMillis
-                )
+                weekRecords
             } else {
                 currentRecords
             }
@@ -1019,11 +985,8 @@ private fun BreakProgressSection(
                 records.forEach { record ->
 
                     val label =
-                        SimpleDateFormat(
-                            "EEE",
-                            Locale.ENGLISH
-                        ).format(
-                            Date(record.timestamp)
+                        AnalyticsCalculator.weekdayLabel(
+                            record.timestamp
                         )
 
                     BreakProgressItem(
@@ -1139,372 +1102,5 @@ private fun BreakProgressItem(
             fontSize = 8.sp,
             color = SecondaryText
         )
-    }
-}
-
-/*
- * ---------------------------------------------------------
- * DATA / CALCULATION HELPERS
- * ---------------------------------------------------------
- */
-
-private fun getRecordsForPeriod(
-    period: AnalyticsPeriod,
-    selectedDateMillis: Long
-): List<ActivityRecord> {
-
-    return when (period) {
-
-        AnalyticsPeriod.DAILY ->
-            AnalyticsRepository.getDailyRecords(
-                selectedDateMillis
-            )
-
-        AnalyticsPeriod.WEEKLY ->
-            AnalyticsRepository.getWeeklyRecords(
-                selectedDateMillis
-            )
-
-        AnalyticsPeriod.MONTHLY ->
-            AnalyticsRepository.getMonthlyRecords(
-                selectedDateMillis
-            )
-    }
-}
-
-private fun getPreviousRecordsForPeriod(
-    period: AnalyticsPeriod,
-    selectedDateMillis: Long
-): List<ActivityRecord> {
-
-    return when (period) {
-
-        AnalyticsPeriod.DAILY ->
-            AnalyticsRepository.getPreviousDailyRecords(
-                selectedDateMillis
-            )
-
-        AnalyticsPeriod.WEEKLY ->
-            AnalyticsRepository.getPreviousWeeklyRecords(
-                selectedDateMillis
-            )
-
-        AnalyticsPeriod.MONTHLY ->
-            AnalyticsRepository.getPreviousMonthlyRecords(
-                selectedDateMillis
-            )
-    }
-}
-
-private fun buildChartData(
-    period: AnalyticsPeriod,
-    records: List<ActivityRecord>
-): ChartData {
-
-    if (records.isEmpty()) {
-
-        return ChartData(
-            sittingValues = emptyList(),
-            activeValues = emptyList(),
-            labels = emptyList()
-        )
-    }
-
-    return when (period) {
-
-        AnalyticsPeriod.DAILY -> {
-
-            /*
-             * A daily ActivityRecord currently contains daily totals.
-             *
-             * For A2 visualisation, the total is distributed into
-             * time blocks using weights. The total itself still comes
-             * from the repository rather than a hard-coded UI total.
-             *
-             * A4 can replace these blocks with actual sensor timestamps.
-             */
-            val record =
-                records.first()
-
-            val sittingWeights =
-                listOf(
-                    0.15f,
-                    0.19f,
-                    0.17f,
-                    0.18f,
-                    0.16f,
-                    0.15f
-                )
-
-            val activeWeights =
-                listOf(
-                    0.08f,
-                    0.10f,
-                    0.19f,
-                    0.22f,
-                    0.20f,
-                    0.21f
-                )
-
-            ChartData(
-                sittingValues =
-                    sittingWeights.map {
-                        record.sittingMinutes *
-                                it / 60f
-                    },
-                activeValues =
-                    activeWeights.map {
-                        record.activeMinutes *
-                                it / 60f
-                    },
-                labels =
-                    listOf(
-                        "8am",
-                        "10am",
-                        "12pm",
-                        "2pm",
-                        "4pm",
-                        "6pm"
-                    )
-            )
-        }
-
-        AnalyticsPeriod.WEEKLY -> {
-
-            ChartData(
-                sittingValues =
-                    records.map {
-                        it.sittingMinutes / 60f
-                    },
-                activeValues =
-                    records.map {
-                        it.activeMinutes / 60f
-                    },
-                labels =
-                    records.map {
-                        SimpleDateFormat(
-                            "EEE",
-                            Locale.ENGLISH
-                        ).format(
-                            Date(it.timestamp)
-                        )
-                    }
-            )
-        }
-
-        AnalyticsPeriod.MONTHLY -> {
-
-            val weeklyGroups =
-                records.chunked(7)
-
-            ChartData(
-                sittingValues =
-                    weeklyGroups.map { week ->
-                        week.sumOf {
-                            it.sittingMinutes
-                        } / 60f
-                    },
-                activeValues =
-                    weeklyGroups.map { week ->
-                        week.sumOf {
-                            it.activeMinutes
-                        } / 60f
-                    },
-                labels =
-                    weeklyGroups.indices.map {
-                        "W${it + 1}"
-                    }
-            )
-        }
-    }
-}
-
-private fun formatMinutes(
-    totalMinutes: Int
-): String {
-
-    if (totalMinutes <= 0) {
-        return "0m"
-    }
-
-    val hours =
-        totalMinutes / 60
-
-    val minutes =
-        totalMinutes % 60
-
-    return when {
-
-        hours == 0 ->
-            "${minutes}m"
-
-        minutes == 0 ->
-            "${hours}h"
-
-        else ->
-            "${hours}h ${minutes}m"
-    }
-}
-
-private fun calculatePercentageChange(
-    current: Int,
-    previous: Int
-): Int {
-
-    if (previous <= 0) {
-        return 0
-    }
-
-    return (
-            (
-                    current - previous
-                    ).toDouble() /
-                    previous.toDouble() *
-                    100.0
-            ).roundToInt()
-}
-
-private fun formatPercentageChange(
-    change: Int
-): String {
-
-    return when {
-
-        change > 0 ->
-            "↑ ${change}%"
-
-        change < 0 ->
-            "↓ ${abs(change)}%"
-
-        else ->
-            "—"
-    }
-}
-
-private fun formatNumberChange(
-    change: Int
-): String {
-
-    return when {
-
-        change > 0 ->
-            "↑ $change"
-
-        change < 0 ->
-            "↓ ${abs(change)}"
-
-        else ->
-            "—"
-    }
-}
-
-private fun createInsight(
-    sittingChange: Int,
-    activeChange: Int,
-    breaksCompleted: Int,
-    breakTarget: Int
-): String {
-
-    val breakCompliance =
-        if (breakTarget > 0) {
-            breaksCompleted.toFloat() /
-                    breakTarget.toFloat()
-        } else {
-            0f
-        }
-
-    return when {
-
-        sittingChange >= 10 ->
-            "Your sitting time has increased compared with the previous period. " +
-                    "Try taking a short movement break soon."
-
-        sittingChange <= -10 ->
-            "Your sitting time has decreased compared with the previous period. " +
-                    "Keep maintaining regular movement breaks."
-
-        activeChange >= 10 ->
-            "Your active time is improving. Keep up the regular movement breaks."
-
-        breakCompliance < 0.5f ->
-            "You have completed fewer than half of your planned breaks. " +
-                    "A short ergonomic stretch may help."
-
-        breakCompliance >= 0.8f ->
-            "You are completing most of your planned breaks. " +
-                    "Keep maintaining this routine."
-
-        else ->
-            "Your activity pattern is relatively balanced. " +
-                    "Continue taking regular ergonomic breaks."
-    }
-}
-
-private fun formatPeriodLabel(
-    millis: Long,
-    period: AnalyticsPeriod
-): String {
-
-    return when (period) {
-
-        AnalyticsPeriod.DAILY -> {
-
-            SimpleDateFormat(
-                "EEE, d MMM yyyy",
-                Locale.ENGLISH
-            ).format(
-                Date(millis)
-            )
-        }
-
-        AnalyticsPeriod.WEEKLY -> {
-
-            val start =
-                Calendar.getInstance().apply {
-
-                    timeInMillis = millis
-
-                    firstDayOfWeek =
-                        Calendar.MONDAY
-
-                    set(
-                        Calendar.DAY_OF_WEEK,
-                        Calendar.MONDAY
-                    )
-                }
-
-            val end =
-                start.clone() as Calendar
-
-            end.add(
-                Calendar.DAY_OF_YEAR,
-                6
-            )
-
-            val startFormatter =
-                SimpleDateFormat(
-                    "d MMM",
-                    Locale.ENGLISH
-                )
-
-            val endFormatter =
-                SimpleDateFormat(
-                    "d MMM yyyy",
-                    Locale.ENGLISH
-                )
-
-            "${startFormatter.format(start.time)} – " +
-                    endFormatter.format(end.time)
-        }
-
-        AnalyticsPeriod.MONTHLY -> {
-
-            SimpleDateFormat(
-                "MMMM yyyy",
-                Locale.ENGLISH
-            ).format(
-                Date(millis)
-            )
-        }
     }
 }
