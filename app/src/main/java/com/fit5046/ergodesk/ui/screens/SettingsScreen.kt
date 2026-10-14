@@ -1,28 +1,5 @@
 package com.fit5046.ergodesk.ui.screens
 
-/*
- * FIT5046 Assessment 2 — ErgoDesk
- * Member 2 — Settings screen (skeleton prototype, UI only).
- *
- * Back navigation: onLogout comes from AppNavHost ("Sign out" -> Login).
- * The bottom NavigationBar is app-wide (ErgoDeskBottomNavBar).
- *
- * The work profile (work hours, job type, discomfort areas) lives in
- * Member 3's ErgoForm assessment and is read-only here. Settings only holds
- * app preferences. "Quiet hours" is a do-not-disturb window, not work hours.
- *
- * Components: Expanded (Exposed) Dropdown Menu x2 (basic);
- * Switch x4, Slider x2, TimePicker x2 in a dialog (additional).
- *
- * Step 4 form guidelines:
- *   G1  related fields grouped under section headers (Monitoring / Schedule /
- *       Reminders / Context sources)
- *   G2  control type matches the data type (time -> TimePicker, range ->
- *       Slider, choice -> Dropdown), which blocks bad input
- *   G3  the current value is always visible next to each control ("30 min",
- *       "12:30"), so the user never has to guess
- */
-
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -46,50 +23,74 @@ import com.fit5046.ergodesk.ui.theme.ErgoGreen
 import java.util.Locale
 import kotlin.math.roundToInt
 
+import androidx.compose.ui.platform.LocalContext
+import com.fit5046.ergodesk.data.local.AppSettings
+import com.fit5046.ergodesk.data.local.SettingsRepository
+import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(onLogout: () -> Unit) {
+    //DataStore Repository
+    val context = LocalContext.current
+    val repository = remember(context) {SettingsRepository(context.applicationContext)}
+    val scope = rememberCoroutineScope()
 
-    // Prototype: local state only; A4 supplies this from a ViewModel + Room/DataStore.
-    var monitoringEnabled by remember { mutableStateOf(true) }
-    var smartMode by remember { mutableStateOf(true) }
-    var weatherAware by remember { mutableStateOf(true) }
-    var calendarAware by remember { mutableStateOf(false) }
+    //Current Firebase User
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val userName = currentUser?.displayName?.takeIf {it.isNotBlank()} ?: currentUser?.email ?: "User"
 
-    var breakInterval by remember { mutableFloatStateOf(30f) }         // 20–90 min
-    var movementSensitivity by remember { mutableFloatStateOf(3f) }    // 1–5
+    //Settings Values
+    var monitoringEnabled by remember {mutableStateOf(true)}
+    var smartMode by remember {mutableStateOf(true)}
+    var weatherAware by remember {mutableStateOf(true)}
+    var calendarAware by remember {mutableStateOf(false)}
 
-    var quietStart by remember { mutableStateOf("12:30") }
-    var quietEnd by remember { mutableStateOf("13:30") }
-    var showQuietStartPicker by remember { mutableStateOf(false) }
-    var showQuietEndPicker by remember { mutableStateOf(false) }
+    var breakInterval by remember {mutableFloatStateOf(30f)}
+    var movementSensitivity by remember {mutableFloatStateOf(3f)}
+
+    var quietStart by remember {mutableStateOf("12:30")}
+    var quietEnd by remember {mutableStateOf("13:30")}
+    var showQuietStartPicker by remember {mutableStateOf(false)}
+    var showQuietEndPicker by remember {mutableStateOf(false)}
 
     val reminderStyles = listOf("Notification", "Sound + notification", "Vibration only", "Silent banner")
-    var reminderStyle by remember { mutableStateOf(reminderStyles.first()) }
+    var reminderStyle by remember {mutableStateOf(reminderStyles.first())}
 
     val breakActivities = listOf("Stretch", "Walk", "Eye rest")
-    var breakActivity by remember { mutableStateOf(breakActivities.first()) }
+    var breakActivity by remember {mutableStateOf(breakActivities.first())}
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-    ) {
+    var settingsLoaded by remember {mutableStateOf(false)}
+    var isSaving by remember {mutableStateOf(false)}
+    var saveMessage by remember {mutableStateOf("")}
 
+    LaunchedEffect(repository) {
+        try {
+            val saved = repository.settings.first()
+            monitoringEnabled = saved.monitoringEnabled
+            smartMode = saved.smartMode
+            weatherAware = saved.weatherAware
+            calendarAware = saved.calendarAware
+            breakInterval = saved.breakInterval
+            movementSensitivity = saved.movementSensitivity
+            quietStart = saved.quietStart
+            quietEnd = saved.quietEnd
+            reminderStyle = saved.reminderStyle
+            breakActivity = saved.breakActivity
+        } catch (error: Exception) {
+            saveMessage = "Unable to load saved settings!"
+        } finally {
+            settingsLoaded = true
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
         ErgoDeskHeader()
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-
-            /* Title */
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(vertical = 8.dp)
-            ) {
+        Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
                 Icon(
                     Icons.Filled.Settings,
                     contentDescription = null,
@@ -100,54 +101,36 @@ fun SettingsScreen(onLogout: () -> Unit) {
                 Text("Settings", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
 
-            /* User card — read-only; the profile is maintained in the ErgoForm assessment. */
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = ErgoSoftGreen
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text("Sherry Fang", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Office worker · 8 h screen time / day",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ErgoMutedText
-                    )
-                    Text(
-                        "From your ergonomic assessment",
-                        fontSize = 11.sp,
-                        color = ErgoMutedText,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
+            //User Card: Current Logged-In User
+            Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp), color = ErgoSoftGreen) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(userName, style = MaterialTheme.typography.titleMedium)
+                    Text(currentUser?.email ?: "", style = MaterialTheme.typography.bodySmall, color = ErgoMutedText)
                 }
             }
 
-            /* G1 — section 1: Monitoring */
+            //G1 — Section 1: Monitoring
             SectionHeader("Monitoring")
 
             SettingSwitchRow(
                 title = "Enable sitting monitoring",
                 subtitle = "Track sitting time in the background",
                 checked = monitoringEnabled,
-                onCheckedChange = { monitoringEnabled = it }
+                onCheckedChange = {monitoringEnabled = it}
             )
             SettingSwitchRow(
                 title = "Smart context-aware mode",
                 subtitle = "Automatically adjust the break interval from your recent break history",
                 checked = smartMode,
-                onCheckedChange = { smartMode = it }
+                onCheckedChange = {smartMode = it}
             )
 
-            // G2 + G3: a Slider instead of a text field; current value shown top-right.
+            //G2 + G3: A Slider instead of a Text Field; current value shown top-right
             SettingSliderRow(
                 title = "Break interval",
                 valueLabel = "${breakInterval.roundToInt()} min",
                 value = breakInterval,
-                onValueChange = { breakInterval = it },
+                onValueChange = {breakInterval = it},
                 valueRange = 20f..90f,
                 steps = 13,
                 endLabels = "20 min" to "90 min"
@@ -156,26 +139,25 @@ fun SettingsScreen(onLogout: () -> Unit) {
                 title = "Movement sensitivity",
                 valueLabel = "Level ${movementSensitivity.roundToInt()}",
                 value = movementSensitivity,
-                onValueChange = { movementSensitivity = it },
+                onValueChange = {movementSensitivity = it},
                 valueRange = 1f..5f,
                 steps = 3,
                 endLabels = "Relaxed" to "Sensitive"
             )
 
-            /* G1 — section 2: Schedule */
+            //G1 — Section 2: Schedule
             SectionHeader("Schedule")
 
-            // G2: time is entered through a TimePicker dialog, so "9pm" / "21:00" style
-            // input errors are impossible.
+            //G2: Time is entered through a TimePicker dialog, so "9pm" / "21:00" style input errors are impossible
             TimeFieldRow(
                 label = "Quiet hours start",
                 value = quietStart,
-                onClick = { showQuietStartPicker = true }
+                onClick = {showQuietStartPicker = true}
             )
             TimeFieldRow(
                 label = "Quiet hours end",
                 value = quietEnd,
-                onClick = { showQuietEndPicker = true }
+                onClick = {showQuietEndPicker = true}
             )
             Text(
                 "Reminders are muted during these hours (e.g. lunch or a focus block).",
@@ -184,47 +166,90 @@ fun SettingsScreen(onLogout: () -> Unit) {
                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
             )
 
-            /* G1 — section 3: Reminders */
+            //G1 — Section 3: Reminders
             SectionHeader("Reminders")
 
-            // Basic component: Expanded (Exposed) Dropdown Menu.
+            //Basic Component: Expanded (Exposed) Dropdown Menu.
             DropdownField(
                 label = "Reminder style",
                 options = reminderStyles,
                 selected = reminderStyle,
-                onSelected = { reminderStyle = it }
+                onSelected = {reminderStyle = it}
             )
             DropdownField(
                 label = "Break activity preference",
                 options = breakActivities,
                 selected = breakActivity,
-                onSelected = { breakActivity = it }
+                onSelected = {breakActivity = it}
             )
 
-            /* G1 — section 4: Context sources */
+            //G1 — Section 4: Context Sources
             SectionHeader("Context sources")
 
             SettingSwitchRow(
                 title = "Weather-based suggestions",
                 subtitle = "Suggest an outdoor walk when conditions are suitable",
                 checked = weatherAware,
-                onCheckedChange = { weatherAware = it }
+                onCheckedChange = {weatherAware = it}
             )
             SettingSwitchRow(
                 title = "Calendar awareness",
                 subtitle = "Hold reminders while you are in a meeting",
                 checked = calendarAware,
-                onCheckedChange = { calendarAware = it }
+                onCheckedChange = {calendarAware = it}
             )
 
             Spacer(Modifier.height(20.dp))
 
             Button(
-                onClick = { /* A4: persist to Room / DataStore */ },
+                onClick = {
+                    scope.launch {
+                        isSaving = true
+                        saveMessage = ""
+
+                        try {
+                            repository.saveSettings(
+                                AppSettings(
+                                    monitoringEnabled = monitoringEnabled,
+                                    smartMode = smartMode,
+                                    weatherAware = weatherAware,
+                                    calendarAware = calendarAware,
+                                    breakInterval = breakInterval,
+                                    movementSensitivity = movementSensitivity,
+                                    quietStart = quietStart,
+                                    quietEnd = quietEnd,
+                                    reminderStyle = reminderStyle,
+                                    breakActivity = breakActivity
+                                )
+                            )
+
+                            saveMessage = "Settings saved successfully!"
+
+                        } catch (error: Exception) {
+                            saveMessage = "Unable to save settings."
+                        } finally {
+                            isSaving = false
+                        }
+                    }
+                },
+                enabled = settingsLoaded && !isSaving,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
-            ) { Text("Save settings") }
+            ) {
+                Text(if (isSaving) "Saving..." else "Save settings")
+            }
+
+            if (saveMessage.isNotEmpty()) {
+                Text(
+                    text = saveMessage,
+                    color = if (saveMessage == "Settings saved successfully!")
+                        ErgoGreen
+                    else
+                        MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
 
             Spacer(Modifier.height(8.dp))
 
@@ -240,13 +265,13 @@ fun SettingsScreen(onLogout: () -> Unit) {
         }
     }
 
-    /* TimePicker dialogs (additional component). */
+    //TimePicker dialogs (Additional Component)
     if (showQuietStartPicker) {
         TimePickerDialogM3(
             title = "Quiet hours start",
             initial = quietStart,
-            onDismiss = { showQuietStartPicker = false },
-            onConfirm = { h, m ->
+            onDismiss = {showQuietStartPicker = false},
+            onConfirm = {h, m ->
                 quietStart = String.format(Locale.getDefault(), "%02d:%02d", h, m)
                 showQuietStartPicker = false
             }
@@ -256,16 +281,14 @@ fun SettingsScreen(onLogout: () -> Unit) {
         TimePickerDialogM3(
             title = "Quiet hours end",
             initial = quietEnd,
-            onDismiss = { showQuietEndPicker = false },
-            onConfirm = { h, m ->
+            onDismiss = {showQuietEndPicker = false},
+            onConfirm = {h, m ->
                 quietEnd = String.format(Locale.getDefault(), "%02d:%02d", h, m)
                 showQuietEndPicker = false
             }
         )
     }
 }
-
-/* Reusable pieces */
 
 @Composable
 private fun SectionHeader(text: String) {
@@ -301,7 +324,7 @@ private fun SettingSwitchRow(
             )
         }
         Spacer(Modifier.width(12.dp))
-        // Additional component: Switch.
+        //Additional Component: Switch.
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -322,7 +345,7 @@ private fun SettingSliderRow(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(title, style = MaterialTheme.typography.bodyLarge)
-            // G3: current value stays visible.
+            //G3: Current value stays visible
             Text(
                 valueLabel,
                 style = MaterialTheme.typography.bodyLarge,
@@ -330,7 +353,7 @@ private fun SettingSliderRow(
                 color = ErgoGreen
             )
         }
-        // Additional component: Slider.
+        //Additional Component: Slider.
         Slider(
             value = value,
             onValueChange = onValueChange,
@@ -347,8 +370,7 @@ private fun SettingSliderRow(
     }
 }
 
-/* Whole-row tap target that opens a TimePicker. A read-only text field can still
- * grab keyboard focus, so a clickable row fits G2 better. */
+//Whole-row tap target that opens a TimePicker. A read-only text field can still grab keyboard focus, so a clickable row fits G2 better. */
 @Composable
 private fun TimeFieldRow(label: String, value: String, onClick: () -> Unit) {
     Surface(
@@ -367,7 +389,7 @@ private fun TimeFieldRow(label: String, value: String, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            // G3: current value shown on the control.
+            //G3: Current value shown on the control.
             Text(
                 value,
                 style = MaterialTheme.typography.titleMedium,
@@ -388,31 +410,31 @@ private fun DropdownField(
     selected: String,
     onSelected: (String) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember {mutableStateOf(false)}
 
-    // Basic component: Expanded (Exposed) Dropdown Menu.
+    //Basic Component: Expanded (Exposed) Dropdown Menu
     ExposedDropdownMenuBox(
         expanded = expanded,
-        onExpandedChange = { expanded = it },
+        onExpandedChange = {expanded = it},
         modifier = Modifier.padding(vertical = 6.dp)
     ) {
         OutlinedTextField(
             value = selected,
             onValueChange = { },
             readOnly = true,
-            label = { Text(label) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            label = {Text(label)},
+            trailingIcon = {ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)},
             modifier = Modifier
                 .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true)
                 .fillMaxWidth()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = {expanded = false}
         ) {
-            options.forEach { option ->
+            options.forEach {option ->
                 DropdownMenuItem(
-                    text = { Text(option) },
+                    text = {Text(option)},
                     onClick = {
                         onSelected(option)
                         expanded = false
@@ -423,7 +445,7 @@ private fun DropdownField(
     }
 }
 
-/* Material3 has no ready-made TimePickerDialog, so wrap TimePicker in a Dialog. */
+//Material3 has no ready-made TimePickerDialog, so wrap TimePicker in a Dialog
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimePickerDialogM3(
@@ -458,14 +480,14 @@ private fun TimePickerDialogM3(
                         .fillMaxWidth()
                         .padding(bottom = 16.dp)
                 )
-                // Additional component: TimePicker.
+                //Additional Component: TimePicker
                 TimePicker(state = state)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
-                    TextButton(onClick = { onConfirm(state.hour, state.minute) }) { Text("OK") }
+                    TextButton(onClick = onDismiss) {Text("Cancel")}
+                    TextButton(onClick = {onConfirm(state.hour, state.minute)}) {Text("OK")}
                 }
             }
         }
@@ -475,5 +497,5 @@ private fun TimePickerDialogM3(
 @Preview(showBackground = true, widthDp = 393, heightDp = 851)
 @Composable
 private fun SettingsScreenPreview() {
-    ErgoDeskTheme { SettingsScreen(onLogout = {}) }
+    ErgoDeskTheme {SettingsScreen(onLogout = {})}
 }

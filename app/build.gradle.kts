@@ -93,6 +93,9 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
     implementation("com.google.firebase:firebase-auth")
 
-    //Google Sign-In (legacy API used in this compact implementation)
+    //Google Sign-In
     implementation("com.google.android.gms:play-services-auth:21.5.1")
+
+    //Datastore Preference
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
 }
