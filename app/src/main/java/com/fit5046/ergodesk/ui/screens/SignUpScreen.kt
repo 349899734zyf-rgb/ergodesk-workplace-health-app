@@ -21,6 +21,19 @@ import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.*
 
+//Email Validation
+import android.util.Patterns
+
+//Firebase Authentication
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.UserProfileChangeRequest
+
+//Required Field Indicator Styling
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignUpScreen(
@@ -31,7 +44,12 @@ fun SignUpScreen(
     var email by remember {mutableStateOf("")}
     var password by remember {mutableStateOf("")}
     var isPasswordVisible by remember {mutableStateOf(false)}
+    var confirmPassword by remember {mutableStateOf("")}
+    var isConfirmPasswordVisible by remember {mutableStateOf(false)}
     var dateOfBirth by remember {mutableStateOf("")}
+
+    var isLoading by remember {mutableStateOf(false)}
+    var errorMessage by remember {mutableStateOf("")}
 
     //Primary Ergonomic Concern Dropdown State
     val discomfortAreas = listOf("Neck & Shoulders", "Lower Back", "Wrists & Hands", "General Sedentary")
@@ -46,6 +64,7 @@ fun SignUpScreen(
     var showDatePicker by remember {mutableStateOf(false)}
 
     val context = LocalContext.current
+    val auth = remember {FirebaseAuth.getInstance()}
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -86,7 +105,9 @@ fun SignUpScreen(
             OutlinedTextField(
                 value = fullName,
                 onValueChange = {fullName = it},
-                label = {Text("Full Name")},
+                label = {Text(buildAnnotatedString {
+                    append("Full Name ")
+                    withStyle(SpanStyle(color = Color.Red)) {append("*")}})},
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -97,7 +118,9 @@ fun SignUpScreen(
             OutlinedTextField(
                 value = email,
                 onValueChange = {email = it},
-                label = {Text("Email Address")},
+                label = {Text(buildAnnotatedString {
+                    append("Email Address ")
+                    withStyle(SpanStyle(color = Color.Red)) {append("*")}})},
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
@@ -109,7 +132,9 @@ fun SignUpScreen(
             OutlinedTextField(
                 value = password,
                 onValueChange = {password = it},
-                label = {Text("Password")},
+                label = {Text(buildAnnotatedString {
+                    append("Password ")
+                    withStyle(SpanStyle(color = Color.Red)) {append("*")}})},
                 supportingText = {Text("Must be at least 8 characters long")},
                 trailingIcon = {
                     TextButton(onClick = {isPasswordVisible = !isPasswordVisible}) {
@@ -124,12 +149,42 @@ fun SignUpScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            //Confirm Password Field
+            OutlinedTextField(
+                value = confirmPassword,
+                onValueChange = {
+                    confirmPassword = it
+                    errorMessage = ""
+                },
+                label = {Text(buildAnnotatedString {
+                    append("Confirm Password ")
+                    withStyle(SpanStyle(color = Color.Red)) {append("*")}})
+                },
+                trailingIcon = {
+                    TextButton(onClick = {isConfirmPasswordVisible = !isConfirmPasswordVisible}) {
+                        Text(if (isConfirmPasswordVisible) "Hide" else "Show")
+                    }
+                },
+                visualTransformation = if (isConfirmPasswordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
             //Date of Birth Field
             OutlinedTextField(
                 value = dateOfBirth,
                 onValueChange = {},
                 readOnly = true,
-                label = {Text("Date of Birth")},
+                label = {Text(buildAnnotatedString {
+                    append("Date of Birth ")
+                    withStyle(SpanStyle(color = Color.Red)) {append("*")}})},
                 trailingIcon = {
                     Icon(
                         imageVector = Icons.Default.DateRange,
@@ -152,7 +207,9 @@ fun SignUpScreen(
                     value = selectedDiscomfort,
                     onValueChange = {},
                     readOnly = true,
-                    label = {Text("Primary Ergonomic Concern")},
+                    label = {Text(buildAnnotatedString {
+                        append("Primary Ergonomic Concern ")
+                        withStyle(SpanStyle(color = Color.Red)) {append("*")}})},
                     trailingIcon = {
                         ExposedDropdownMenuDefaults.TrailingIcon(expanded = isDiscomfortExpanded)
                     },
@@ -181,19 +238,62 @@ fun SignUpScreen(
 
             Spacer(modifier = Modifier.height(30.dp))
 
+            //Error Message
+            if (errorMessage.isNotEmpty()) {
+                Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
             //Sign Up Button
             Button(
                 onClick = {
-                    if (fullName.isBlank() || email.isBlank() || password.isBlank() || dateOfBirth.isBlank() || selectedDiscomfort.isBlank()) {
-                        Toast.makeText(context, "Please fill out all details!", Toast.LENGTH_SHORT).show()
-                    } else {Toast.makeText(context, "Registration Successful!", Toast.LENGTH_SHORT).show()
-                        onSignUpSuccess()
+                    when {fullName.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank() || dateOfBirth.isBlank() || selectedDiscomfort.isBlank() -> {
+                        errorMessage = "Please fill out all details!"
+                    }
+                        !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> {errorMessage = "Please enter a valid email address!"}
+
+                        password.length < 8 -> {errorMessage = "Password must be at least 8 characters long!"}
+                        password != confirmPassword -> {errorMessage = "Passwords do not match!"}
+
+                        else -> {
+                            isLoading = true
+                            errorMessage = ""
+
+                            auth.createUserWithEmailAndPassword(email.trim(), password).addOnCompleteListener {task ->
+                                if (task.isSuccessful) {
+                                    val user = auth.currentUser
+                                    val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(fullName.trim()).build()
+                                    if (user != null) {
+                                        user.updateProfile(profileUpdates).addOnCompleteListener {
+                                            isLoading = false
+                                            Toast.makeText(context, "Registration Successful!", Toast.LENGTH_SHORT).show()
+                                            onSignUpSuccess()
+                                        }
+                                    } else {
+                                        isLoading = false
+                                        errorMessage = "Account Created! Please log in to continue!"
+                                    }
+
+
+                                } else {
+                                    isLoading = false
+                                    errorMessage = task.exception?.localizedMessage ?: "Registration Failed! Please try again!"
+                                }
+                            }
+                        }
                     }
                 },
+                enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth().height(50.dp)
             ) {Text("Sign Up")}
 
             Spacer(modifier = Modifier.height(20.dp))
+
+            //Loading Indicator
+            if (isLoading) {
+                Spacer(modifier = Modifier.height(16.dp))
+                CircularProgressIndicator()
+            }
 
             //Navigation to Login
             TextButton(onClick = onNavigateToLogin) {
