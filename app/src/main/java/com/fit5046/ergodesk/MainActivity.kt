@@ -20,6 +20,7 @@ import com.fit5046.ergodesk.navigation.bottomNavItems
 import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
 import com.fit5046.ergodesk.work.ContextEvaluationWorker
 import com.fit5046.ergodesk.work.SensorIngestWorker
+import com.fit5046.ergodesk.work.WeatherSyncWorker
 
 class MainActivity : ComponentActivity() {
 
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
 
         SensorIngestWorker.schedule(this)
         ContextEvaluationWorker.schedule(this)
+        WeatherSyncWorker.schedule(this)
 
         setContent {
             ErgoDeskTheme {

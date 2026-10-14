@@ -10,6 +10,7 @@ import androidx.work.WorkerParameters
 import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.context.ContextInput
+import com.fit5046.ergodesk.data.context.WeatherCache
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
@@ -51,6 +52,9 @@ class ContextEvaluationWorker(
                 .observeRecordsBetween(window.startMillis, window.endMillis)
                 .first()
 
+        val weather =
+            WeatherCache(applicationContext).read(now)
+
         val decision =
             ContextEngine.evaluate(
                 ContextInput(
@@ -61,8 +65,7 @@ class ContextEvaluationWorker(
                     }.get(Calendar.HOUR_OF_DAY),
                     // TODO: calendar busy-state (needs READ_CALENDAR).
                     inMeeting = false,
-                    // TODO: read the cache WeatherSyncWorker fills.
-                    weather = null
+                    weather = weather
                 )
             )
 
@@ -93,6 +96,8 @@ class ContextEvaluationWorker(
             "Sitting $sittingBoutMinutes min -> $decision, " +
                     if (scheduled) "alarm set in $delayMinutes min" else "alarm cleared"
         )
+
+        Log.d(TAG, "Weather used: ${weather ?: "none cached yet"}")
 
         return Result.success()
     }
