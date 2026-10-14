@@ -1,3 +1,4 @@
+
 [versions]
 agp = "9.3.2"
 coreKtx = "1.19.0"
@@ -11,6 +12,7 @@ composeBom = "2026.02.01"
 workRuntimeKtx = "2.11.2"
 roomRuntime = "2.8.4"
 ksp = "2.3.11"
+
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -34,9 +36,9 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomRuntime" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "roomRuntime" }
 
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 google-services = { id = "com.google.gms.google-services", version = "4.5.0" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-
