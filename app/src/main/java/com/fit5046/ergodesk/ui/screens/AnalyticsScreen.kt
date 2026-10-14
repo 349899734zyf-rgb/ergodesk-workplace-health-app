@@ -31,6 +31,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,11 +80,12 @@ fun AnalyticsScreen() {
     )
 
     /*
-     * Records come from ActivityRepository (prototype data
-     * until Room is merged). Each Flow is re-created when
-     * the selected period or date changes.
+     * Records come from ActivityRepository (Room). Each Flow
+     * is re-created when the selected period or date changes,
+     * and re-emits whenever a worker writes new minutes.
      */
-    val repository = RepositoryProvider.activityRepository
+    val context = LocalContext.current
+    val repository = remember { RepositoryProvider.activityRepository(context) }
 
     val currentRange = remember(selectedPeriod, selectedDateMillis) {
         AnalyticsCalculator.periodRange(selectedPeriod, selectedDateMillis)

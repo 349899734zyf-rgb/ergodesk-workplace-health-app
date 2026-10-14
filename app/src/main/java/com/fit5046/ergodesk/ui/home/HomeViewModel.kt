@@ -35,7 +35,7 @@ class HomeViewModel(
 ) : AndroidViewModel(application) {
 
     private val repository =
-        RepositoryProvider.activityRepository
+        RepositoryProvider.activityRepository(application)
 
     private val startMillis =
         System.currentTimeMillis()

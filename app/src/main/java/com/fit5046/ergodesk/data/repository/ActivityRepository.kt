@@ -6,11 +6,11 @@ import kotlinx.coroutines.flow.Flow
 /*
  * Data source for daily activity summaries.
  *
- * Home, Analytics and the WorkManager worker only depend
- * on this interface. Before the Room database is merged,
- * FakeActivityRepository provides prototype records.
- * After the merge, a Room-backed implementation replaces
- * it in RepositoryProvider.
+ * Home, Analytics and the workers only depend on this
+ * interface. RepositoryProvider supplies the Room-backed
+ * RoomActivityRepository; FakeActivityRepository keeps an
+ * in-memory version and the prototype data used to seed
+ * Room's history.
  */
 interface ActivityRepository {
 

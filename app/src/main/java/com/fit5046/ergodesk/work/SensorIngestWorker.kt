@@ -42,7 +42,7 @@ class SensorIngestWorker(
             PostureClassifier.summarize(samples)
 
         val repository =
-            RepositoryProvider.activityRepository
+            RepositoryProvider.activityRepository(applicationContext)
 
         val today =
             AnalyticsCalculator.periodRange(AnalyticsPeriod.DAILY, now)

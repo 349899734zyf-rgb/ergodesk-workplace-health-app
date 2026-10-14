@@ -48,7 +48,7 @@ class ContextEvaluationWorker(
             ContextEngine.complianceWindow(now)
 
         val history =
-            RepositoryProvider.activityRepository
+            RepositoryProvider.activityRepository(applicationContext)
                 .observeRecordsBetween(window.startMillis, window.endMillis)
                 .first()
 
