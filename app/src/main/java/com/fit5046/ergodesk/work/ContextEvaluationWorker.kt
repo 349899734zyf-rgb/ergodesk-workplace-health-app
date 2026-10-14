@@ -85,10 +85,11 @@ class ContextEvaluationWorker(
             // decision.suggestion once the receiver accepts them.
             BreakAlarmScheduler.scheduleBreakReminder(
                 applicationContext,
-                delayMinutes
+                delayMinutes,
+            automatic = true
             )
         } else {
-            BreakAlarmScheduler.cancelBreakReminder(applicationContext)
+            BreakAlarmScheduler.cancelBreakReminder(applicationContext, automatic = true)
         }
 
         Log.d(
