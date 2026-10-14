@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -76,4 +77,11 @@ dependencies {
     // Debug tools
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    //Firebase Authentication
+    implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
+    implementation("com.google.firebase:firebase-auth")
+
+    //Google Sign-In (legacy API used in this compact implementation)
+    implementation("com.google.android.gms:play-services-auth:21.5.1")
 }
