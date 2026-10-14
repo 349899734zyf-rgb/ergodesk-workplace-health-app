@@ -41,10 +41,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fit5046.ergodesk.ui.viewmodel.StretchViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -69,18 +72,25 @@ private val SoftGreenBubble = Color(0xFFF1F8EE)
 @Composable
 fun StretchDetailScreen(
     stretchId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    viewModel: StretchViewModel = viewModel()
 ) {
-    // Look up the specific routine by ID from StretchDataProvider
-    val stretch = remember(stretchId) {
-        StretchDataProvider.getById(stretchId) ?: StretchDataProvider.items.first()
-    }
+    val id = stretchId.toLongOrNull() ?: 1L
+    val stretchEntity by viewModel.getStretchById(id).collectAsState(initial = null)
 
-    val totalTimeSeconds = stretch.durationSeconds
-    var remainingSeconds by remember(stretchId) { mutableStateOf(totalTimeSeconds) }
+    val totalTimeSeconds = stretchEntity?.durationSeconds ?: 60
+    var remainingSeconds by remember(stretchEntity?.id, totalTimeSeconds) { mutableStateOf(totalTimeSeconds) }
     var isTimerRunning by remember { mutableStateOf(false) }
     var isFavorite by remember { mutableStateOf(false) }
     var showCompletionBanner by remember { mutableStateOf(false) }
+
+    val instructionsList = remember(stretchEntity?.instructions) {
+        stretchEntity?.instructions?.split("\n")?.filter { it.isNotBlank() } ?: listOf(
+            "Position yourself comfortably with your back straight.",
+            "Perform gentle, controlled movements.",
+            "Breathe steadily and hold for 30 seconds."
+        )
+    }
 
     // Dynamic countdown loop
     LaunchedEffect(isTimerRunning, remainingSeconds) {
@@ -117,7 +127,7 @@ fun StretchDetailScreen(
         TopAppBar(
             title = {
                 Text(
-                    text = stretch.title,
+                    text = stretchEntity?.title ?: "Desk Stretch",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = ErgoTextPrimary
@@ -157,7 +167,7 @@ fun StretchDetailScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // ---------------------------------------------------------
-            // 1. Clean Duration Time Bubble (时间气泡)
+            // 1. Clean Duration Time Bubble
             // ---------------------------------------------------------
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -211,7 +221,7 @@ fun StretchDetailScreen(
                             color = SoftGreenBubble
                         ) {
                             Text(
-                                text = stretch.targetArea,
+                                text = stretchEntity?.targetArea ?: "General",
                                 fontSize = 11.sp,
                                 color = ErgoGreen,
                                 fontWeight = FontWeight.SemiBold,
@@ -222,7 +232,7 @@ fun StretchDetailScreen(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    stretch.instructions.forEachIndexed { index, stepText ->
+                    instructionsList.forEachIndexed { index, stepText ->
                         InstructionBullet(
                             number = "${index + 1}",
                             text = stepText
@@ -352,7 +362,7 @@ fun StretchDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "🎉 Awesome! Stretch logged. Sedentary fatigue timer has been reset.",
+                        text = "Awesome! Stretch logged. Sedentary fatigue timer has been reset.",
                         fontSize = 12.sp,
                         color = ErgoGreen,
                         fontWeight = FontWeight.Medium,

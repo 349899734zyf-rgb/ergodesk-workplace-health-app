@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.sp
 import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fit5046.ergodesk.ui.viewmodel.WeatherViewModel
 
 /* Sample data — replaced by Room / ViewModel in A4. */
 
@@ -82,9 +84,12 @@ private val sampleTimeline = listOf(
 )
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    weatherViewModel: WeatherViewModel = viewModel()
+) {
 
     val context = LocalContext.current
+    val weatherAdvice by weatherViewModel.weatherAdvice.collectAsState()
 
     // Prototype: hard-coded state; A4 supplies this from a ViewModel.
     // 30-min break baseline matches the Settings slider default and the report.
@@ -246,7 +251,7 @@ fun HomeScreen() {
                         ) {
 
                             Text(
-                                "21°",
+                                text = weatherAdvice.temperatureFormatted,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
@@ -259,7 +264,7 @@ fun HomeScreen() {
                         Column {
 
                             Text(
-                                "Good time for an outdoor break",
+                                text = weatherAdvice.headline,
                                 style =
                                     MaterialTheme.typography.titleSmall,
                                 fontWeight =
@@ -267,7 +272,7 @@ fun HomeScreen() {
                             )
 
                             Text(
-                                "21 °C, clear, UV 3 · no meeting until 12:30",
+                                text = weatherAdvice.subtitle,
                                 style =
                                     MaterialTheme.typography.bodySmall,
                                 color = ErgoMutedText
