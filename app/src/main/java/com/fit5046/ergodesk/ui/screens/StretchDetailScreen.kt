@@ -167,7 +167,7 @@ fun StretchDetailScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // ---------------------------------------------------------
-            // 1. Clean Duration Time Bubble (时间气泡)
+            // 1. Clean Duration Time Bubble
             // ---------------------------------------------------------
             Surface(
                 shape = RoundedCornerShape(20.dp),
@@ -362,7 +362,7 @@ fun StretchDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "🎉 Awesome! Stretch logged. Sedentary fatigue timer has been reset.",
+                        text = "Awesome! Stretch logged. Sedentary fatigue timer has been reset.",
                         fontSize = 12.sp,
                         color = ErgoGreen,
                         fontWeight = FontWeight.Medium,
