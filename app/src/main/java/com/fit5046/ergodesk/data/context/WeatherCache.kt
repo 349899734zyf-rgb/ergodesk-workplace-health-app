@@ -19,7 +19,8 @@ class WeatherCache(
         fetchedAtMillis: Long = System.currentTimeMillis()
     ) {
         prefs.edit()
-            .putFloat(KEY_TEMPERATURE, snapshot.temperatureC.toFloat())
+            // Stored as raw bits: putFloat would turn 9.6 into 9.600000381.
+            .putLong(KEY_TEMPERATURE, snapshot.temperatureC.toRawBits())
             .putString(KEY_CONDITION, snapshot.condition)
             .putBoolean(KEY_OUTDOOR_FRIENDLY, snapshot.isOutdoorFriendly)
             .putLong(KEY_FETCHED_AT, fetchedAtMillis)
@@ -42,7 +43,7 @@ class WeatherCache(
         }
 
         return WeatherSnapshot(
-            temperatureC = prefs.getFloat(KEY_TEMPERATURE, 0f).toDouble(),
+            temperatureC = Double.fromBits(prefs.getLong(KEY_TEMPERATURE, 0L)),
             condition = prefs.getString(KEY_CONDITION, "") ?: "",
             isOutdoorFriendly = prefs.getBoolean(KEY_OUTDOOR_FRIENDLY, false)
         )
@@ -52,7 +53,7 @@ class WeatherCache(
 
         const val PREFS_NAME = "weather_cache"
 
-        const val KEY_TEMPERATURE = "temperature_c"
+        const val KEY_TEMPERATURE = "temperature_c_bits"
         const val KEY_CONDITION = "condition"
         const val KEY_OUTDOOR_FRIENDLY = "outdoor_friendly"
         const val KEY_FETCHED_AT = "fetched_at"
