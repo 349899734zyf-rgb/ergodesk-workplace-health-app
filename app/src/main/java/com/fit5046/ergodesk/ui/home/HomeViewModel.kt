@@ -1,6 +1,7 @@
 package com.fit5046.ergodesk.ui.home
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
@@ -15,10 +16,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import java.util.Calendar
 
@@ -95,11 +98,20 @@ class HomeViewModel(
                 history = history,
                 hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
             )
-        }.stateIn(
-            scope = viewModelScope,
-            // Stops the 1-second feed shortly after Home
-            // leaves the screen, keeping it across rotation.
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = HomeUiState()
-        )
+        }
+            // The sensor ticks every second, but the state only
+            // changes when a minute passes or data changes.
+            .distinctUntilChanged()
+            .onEach { Log.d(STATE_TAG, it.logSummary) }
+            .stateIn(
+                scope = viewModelScope,
+                // Stops the 1-second feed shortly after Home
+                // leaves the screen, keeping it across rotation.
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = HomeUiState()
+            )
+
+    private companion object {
+        const val STATE_TAG = "HomeState"
+    }
 }

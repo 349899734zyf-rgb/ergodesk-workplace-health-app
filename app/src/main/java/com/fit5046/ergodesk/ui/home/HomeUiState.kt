@@ -56,6 +56,15 @@ data class HomeUiState(
             }
         }
 
+    /*
+     * One line for Logcat, written whenever the state changes.
+     */
+    val logSummary: String
+        get() = "Now $postureLabel, sitting $sittingBoutMinutes min, " +
+                "interval $breakIntervalMinutes min -> \"$statusText\" | " +
+                "hold ${holdReason ?: "none"} | " +
+                "today sitting $sittingTodayMinutes min, breaks $breaksCompleted/$breakTarget"
+
     companion object {
 
         /*

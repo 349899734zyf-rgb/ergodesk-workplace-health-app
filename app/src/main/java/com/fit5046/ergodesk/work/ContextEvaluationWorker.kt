@@ -74,12 +74,15 @@ class ContextEvaluationWorker(
                     sittingBoutMinutes > 0 &&
                     decision.minutesUntilDue <= PERIOD_MINUTES
 
+        val delayMinutes =
+            decision.minutesUntilDue.coerceAtLeast(0).toLong()
+
         if (scheduled) {
             // TODO(Suzie): pass decision.style and
             // decision.suggestion once the receiver accepts them.
             BreakAlarmScheduler.scheduleBreakReminder(
                 applicationContext,
-                decision.minutesUntilDue.coerceAtLeast(0).toLong()
+                delayMinutes
             )
         } else {
             BreakAlarmScheduler.cancelBreakReminder(applicationContext)
@@ -87,7 +90,8 @@ class ContextEvaluationWorker(
 
         Log.d(
             TAG,
-            "Sitting ${sittingBoutMinutes} min -> $decision, alarm ${if (scheduled) "set" else "cleared"}"
+            "Sitting $sittingBoutMinutes min -> $decision, " +
+                    if (scheduled) "alarm set in $delayMinutes min" else "alarm cleared"
         )
 
         return Result.success()
