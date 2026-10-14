@@ -41,17 +41,42 @@ object ActivityIngest {
             totalMinutes - sittingMinutes
 
         val base =
-            existing ?: ActivityRecord(
-                timestamp = nowMillis,
-                sittingMinutes = 0,
-                activeMinutes = 0,
-                breaksCompleted = 0,
-                breakTarget = DEFAULT_BREAK_TARGET
-            )
+            existing ?: emptyDay(nowMillis)
 
         return base.copy(
             sittingMinutes = base.sittingMinutes + sittingMinutes,
             activeMinutes = base.activeMinutes + activeMinutes
+        )
+    }
+
+    /*
+     * The user took a break from Home ("Take a break now").
+     * Feeds break compliance, which ContextEngine uses to
+     * choose the reminder interval.
+     */
+    fun addBreak(
+        existing: ActivityRecord?,
+        nowMillis: Long
+    ): ActivityRecord {
+
+        val base =
+            existing ?: emptyDay(nowMillis)
+
+        return base.copy(
+            breaksCompleted = base.breaksCompleted + 1
+        )
+    }
+
+    private fun emptyDay(
+        nowMillis: Long
+    ): ActivityRecord {
+
+        return ActivityRecord(
+            timestamp = nowMillis,
+            sittingMinutes = 0,
+            activeMinutes = 0,
+            breaksCompleted = 0,
+            breakTarget = DEFAULT_BREAK_TARGET
         )
     }
 }

@@ -4,10 +4,12 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
+import com.fit5046.ergodesk.data.sensor.ActivityIngest
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.PostureState
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
@@ -19,10 +21,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.util.Calendar
 
 private data class LiveSensing(
@@ -110,6 +114,35 @@ class HomeViewModel(
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = HomeUiState()
             )
+
+    /*
+     * "Take a break now": counts a completed break for today
+     * and clears the pending automatic reminder, since the
+     * user is already on a break. A manual snooze is kept.
+     */
+    fun takeBreakNow() {
+        viewModelScope.launch {
+
+            val existing =
+                repository
+                    .observeRecordsBetween(today.startMillis, today.endMillis)
+                    .first()
+                    .firstOrNull()
+
+            val updated =
+                ActivityIngest.addBreak(existing, System.currentTimeMillis())
+
+            repository.upsertRecord(updated)
+
+            BreakAlarmScheduler.cancelBreakReminder(getApplication(), automatic = true)
+
+            Log.d(
+                STATE_TAG,
+                "Break taken -> ${updated.breaksCompleted}/${updated.breakTarget} today, " +
+                        "automatic reminder cleared"
+            )
+        }
+    }
 
     private companion object {
         const val STATE_TAG = "HomeState"

@@ -100,13 +100,18 @@ fun HomeScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val weatherAdvice by weatherViewModel.weatherAdvice.collectAsStateWithLifecycle()
 
-    HomeContent(state, weatherAdvice)
+    HomeContent(
+        state = state,
+        weatherAdvice = weatherAdvice,
+        onTakeBreak = viewModel::takeBreakNow
+    )
 }
 
 @Composable
 private fun HomeContent(
     state: HomeUiState,
-    weatherAdvice: WeatherAdvice
+    weatherAdvice: WeatherAdvice,
+    onTakeBreak: () -> Unit
 ) {
 
     val context = LocalContext.current
@@ -394,7 +399,14 @@ private fun HomeContent(
 
                     Button(
                         onClick = {
-                            /* A4: start break session */
+
+                            onTakeBreak()
+
+                            Toast.makeText(
+                                context,
+                                "Break logged. Enjoy a short stretch!",
+                                Toast.LENGTH_SHORT
+                            ).show()
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -616,7 +628,8 @@ private fun HomeScreenPreview() {
                 headline = "Good time for an outdoor break",
                 subtitle = "21 °C, sunny, UV 3 · Ideal for a 5-min walk",
                 isOutdoorFriendly = true
-            )
+            ),
+            onTakeBreak = {}
         )
     }
 }
