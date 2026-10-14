@@ -31,6 +31,12 @@ import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.GoogleAuthProvider
 
+//Required Field Indicator Styling
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
+
 @Composable
 fun LoginScreen(
     onNavigateToSignUp: () -> Unit = {},
@@ -64,12 +70,15 @@ fun LoginScreen(
                     Toast.makeText(context, "Login Successful!", Toast.LENGTH_SHORT).show()
                     onLoginSuccess()
                 } else {
-                    errorMessage = "Google login failed!"
+                    errorMessage = "Google login failed: ${task.exception?.localizedMessage}"
                 }
             }
+        } catch (error: ApiException) {
+            isLoading = false
+            errorMessage = "Google Sign-In error: ${error.statusCode}"
         } catch (error: Exception) {
             isLoading = false
-            errorMessage = "Google Sign-In cancelled or failed!"
+            errorMessage = "Google Sign-In failed: ${error.message}"
         }
     }
 
@@ -94,7 +103,9 @@ fun LoginScreen(
                 onValueChange = {
                     email = it
                     errorMessage = ""},
-                label = {Text("Email")},
+                label = {Text(buildAnnotatedString {
+                    append("Email ")
+                    withStyle(SpanStyle(color = Color.Red)) {append("*")}})},
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Person,
@@ -112,7 +123,9 @@ fun LoginScreen(
                 value = password,
                 onValueChange = {password = it
                     errorMessage = ""},
-                label = {Text("Password")},
+                label = {Text(buildAnnotatedString {
+                    append("Password ")
+                    withStyle(SpanStyle(color = Color.Red)) {append("*")}})},
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Lock,
