@@ -90,6 +90,8 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
         mutableStateOf("17:00")
     }
 
+    var showTimeError by remember { mutableStateOf(false) }
+
     var concerns by remember {
         mutableStateOf(emptySet<String>())
     }
@@ -145,6 +147,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
         assessmentDate = System.currentTimeMillis()
         startTime = "09:00"
         endTime = "17:00"
+        showTimeError = false
         concerns = emptySet()
         notes = ""
         editingAssessmentId = null
@@ -158,6 +161,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
         assessmentDate = assessment.createdAt
         startTime = assessment.workStartTime
         endTime = assessment.workEndTime
+        showTimeError = false
         concerns = assessment.concernAreas
         notes = assessment.notes
         editingAssessmentId = assessment.id
@@ -176,9 +180,11 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
         } ?: -1
 
         if (startMinutes < 0 || endMinutes <= startMinutes) {
+            showTimeError = true
             message = "End time must be later than start time."
             return
         }
+        showTimeError = false
 
         val editingId = editingAssessmentId
         val existing = roomAssessments.firstOrNull { it.uid.toLong() == editingId }
@@ -296,59 +302,30 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
                     modifier = Modifier.height(6.dp)
                 )
 
-                Box(
+                ExposedDropdownMenuBox(
+                    expanded = jobExpanded,
+                    onExpandedChange = { jobExpanded = it },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-
-                    Surface(
+                    OutlinedTextField(
+                        value = jobType,
+                        onValueChange = {},
+                        readOnly = true,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                jobExpanded = true
-                            },
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(
-                            1.dp,
-                            FormBorder
-                        ),
-                        color = Color.White
-                    ) {
-
-                        Row(
-                            modifier = Modifier.padding(
-                                horizontal = 13.dp,
-                                vertical = 13.dp
-                            ),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-
-                            Text(
-                                text = jobType,
-                                modifier = Modifier.weight(1f),
-                                fontSize = 13.sp
-                            )
-
-                            Icon(
-                                imageVector = Icons.Filled.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = FormSecondaryText
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = jobExpanded)
+                        },
+                        singleLine = true
+                    )
+                    ExposedDropdownMenu(
                         expanded = jobExpanded,
-                        onDismissRequest = {
-                            jobExpanded = false
-                        }
+                        onDismissRequest = { jobExpanded = false }
                     ) {
-
                         jobTypes.forEach { option ->
-
                             DropdownMenuItem(
-                                text = {
-                                    Text(option)
-                                },
+                                text = { Text(option) },
                                 onClick = {
                                     jobType = option
                                     jobExpanded = false
@@ -372,59 +349,30 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
                     modifier = Modifier.height(6.dp)
                 )
 
-                Box(
+                ExposedDropdownMenuBox(
+                    expanded = discomfortExpanded,
+                    onExpandedChange = { discomfortExpanded = it },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-
-                    Surface(
+                    OutlinedTextField(
+                        value = mainDiscomfort,
+                        onValueChange = {},
+                        readOnly = true,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable {
-                                discomfortExpanded = true
-                            },
-                        shape = RoundedCornerShape(8.dp),
-                        border = BorderStroke(
-                            1.dp,
-                            FormBorder
-                        ),
-                        color = Color.White
-                    ) {
-
-                        Row(
-                            modifier = Modifier.padding(
-                                horizontal = 13.dp,
-                                vertical = 13.dp
-                            ),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-
-                            Text(
-                                text = mainDiscomfort,
-                                modifier = Modifier.weight(1f),
-                                fontSize = 13.sp
-                            )
-
-                            Icon(
-                                imageVector = Icons.Filled.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = FormSecondaryText
-                            )
-                        }
-                    }
-
-                    DropdownMenu(
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, true),
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = discomfortExpanded)
+                        },
+                        singleLine = true
+                    )
+                    ExposedDropdownMenu(
                         expanded = discomfortExpanded,
-                        onDismissRequest = {
-                            discomfortExpanded = false
-                        }
+                        onDismissRequest = { discomfortExpanded = false }
                     ) {
-
                         discomfortAreas.forEach { option ->
-
                             DropdownMenuItem(
-                                text = {
-                                    Text(option)
-                                },
+                                text = { Text(option) },
                                 onClick = {
                                     mainDiscomfort = option
                                     discomfortExpanded = false
@@ -475,6 +423,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
                         modifier = Modifier.weight(1f),
                         label = "Start Time",
                         value = startTime,
+                        isError = false,
                         onClick = {
                             showStartTimePicker = true
                         }
@@ -484,6 +433,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
                         modifier = Modifier.weight(1f),
                         label = "End Time",
                         value = endTime,
+                        isError = showTimeError,
                         onClick = {
                             showEndTimePicker = true
                         }
@@ -839,6 +789,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
                     hour = startTimePickerState.hour,
                     minute = startTimePickerState.minute
                 )
+                showTimeError = false
 
                 showStartTimePicker = false
             },
@@ -859,6 +810,7 @@ fun ErgoFormScreen(assessmentViewModel: AssessmentViewModel = viewModel()) {
                     hour = endTimePickerState.hour,
                     minute = endTimePickerState.minute
                 )
+                showTimeError = false
 
                 showEndTimePicker = false
             },
@@ -983,6 +935,7 @@ private fun TimeField(
     modifier: Modifier,
     label: String,
     value: String,
+    isError: Boolean,
     onClick: () -> Unit
 ) {
 
@@ -1009,7 +962,7 @@ private fun TimeField(
             shape = RoundedCornerShape(8.dp),
             border = BorderStroke(
                 1.dp,
-                FormBorder
+                if (isError) MaterialTheme.colorScheme.error else FormBorder
             ),
             color = Color.White
         ) {
@@ -1038,6 +991,14 @@ private fun TimeField(
                     fontSize = 13.sp
                 )
             }
+        }
+
+        if (isError) {
+            Text(
+                text = "End time must be later than start time.",
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 11.sp
+            )
         }
     }
 }
