@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -58,6 +59,16 @@ dependencies {
 
     // ErgoDesk shared skeleton navigation
     implementation("androidx.navigation:navigation-compose:2.7.7")
+
+    // Room Database
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
+
+    // Retrofit & Gson (Public Web API - Member 4 responsibility)
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
+    implementation("com.google.code.gson:gson:2.11.0")
 
     // Icons used by the ErgoDesk skeleton
     implementation("androidx.compose.material:material-icons-extended:1.6.7")

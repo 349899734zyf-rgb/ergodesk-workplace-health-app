@@ -10,8 +10,8 @@ package com.fit5046.ergodesk.ui.screens
  * Route object is Screen.Dashboard ("dashboard"); the team label is "Home".
  *
  * A4: live posture, sitting bout, break interval and today's totals come
- * from HomeViewModel. The context card and timeline are still samples
- * until weather and ActivitySession data exist.
+ * from HomeViewModel; the weather card comes from WeatherViewModel (Member 4).
+ * The timeline is still a sample until ActivitySession data exists.
  */
 
 import android.widget.Toast
@@ -41,11 +41,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
+import com.fit5046.ergodesk.data.network.model.WeatherAdvice
 import com.fit5046.ergodesk.data.sensor.PostureState
 import com.fit5046.ergodesk.ui.home.HomeUiState
 import com.fit5046.ergodesk.ui.home.HomeViewModel
 import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
+import com.fit5046.ergodesk.ui.viewmodel.WeatherViewModel
 
 /* Sample timeline — replaced once Room stores ActivitySession rows. */
 
@@ -91,17 +93,20 @@ private val sampleTimeline = listOf(
 
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = viewModel()
+    viewModel: HomeViewModel = viewModel(),
+    weatherViewModel: WeatherViewModel = viewModel()
 ) {
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val weatherAdvice by weatherViewModel.weatherAdvice.collectAsStateWithLifecycle()
 
-    HomeContent(state)
+    HomeContent(state, weatherAdvice)
 }
 
 @Composable
 private fun HomeContent(
-    state: HomeUiState
+    state: HomeUiState,
+    weatherAdvice: WeatherAdvice
 ) {
 
     val context = LocalContext.current
@@ -272,7 +277,7 @@ private fun HomeContent(
                         ) {
 
                             Text(
-                                "21°",
+                                text = weatherAdvice.temperatureFormatted,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
@@ -285,7 +290,7 @@ private fun HomeContent(
                         Column {
 
                             Text(
-                                "Good time for an outdoor break",
+                                text = weatherAdvice.headline,
                                 style =
                                     MaterialTheme.typography.titleSmall,
                                 fontWeight =
@@ -293,7 +298,7 @@ private fun HomeContent(
                             )
 
                             Text(
-                                "21 °C, clear, UV 3 · no meeting until 12:30",
+                                text = weatherAdvice.subtitle,
                                 style =
                                     MaterialTheme.typography.bodySmall,
                                 color = ErgoMutedText
@@ -605,6 +610,12 @@ private fun HomeScreenPreview() {
                 sittingBoutMinutes = 22,
                 sittingTodayMinutes = 380,
                 breaksCompleted = 5
+            ),
+            WeatherAdvice(
+                temperatureFormatted = "21°",
+                headline = "Good time for an outdoor break",
+                subtitle = "21 °C, sunny, UV 3 · Ideal for a 5-min walk",
+                isOutdoorFriendly = true
             )
         )
     }
