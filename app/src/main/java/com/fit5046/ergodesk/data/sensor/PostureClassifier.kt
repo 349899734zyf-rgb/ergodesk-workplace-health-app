@@ -134,6 +134,28 @@ class SittingBoutTracker(
 
         const val DEFAULT_MIN_BREAK_SECONDS = 60
 
+        /*
+         * A break the user reports ("Take a break now") ends
+         * the bout as well, even if the sensor did not see
+         * them stand up: the bout is capped at the time
+         * since that break.
+         */
+        fun withManualBreak(
+            sensorBoutSeconds: Int,
+            nowMillis: Long,
+            lastBreakMillis: Long?
+        ): Int {
+
+            if (lastBreakMillis == null || lastBreakMillis > nowMillis) {
+                return sensorBoutSeconds
+            }
+
+            val secondsSinceBreak =
+                (nowMillis - lastBreakMillis) / 1000L
+
+            return minOf(sensorBoutSeconds.toLong(), secondsSinceBreak).toInt()
+        }
+
         // Long enough to see the start of a bout that runs
         // well past the relaxed 45-minute interval.
         const val LOOKBACK_MILLIS = 2 * 60 * 60 * 1000L

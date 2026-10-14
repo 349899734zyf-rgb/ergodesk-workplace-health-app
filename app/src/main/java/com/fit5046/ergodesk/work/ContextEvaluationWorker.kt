@@ -12,6 +12,7 @@ import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.context.ContextInput
 import com.fit5046.ergodesk.data.context.WeatherCache
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
+import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
 import com.fit5046.ergodesk.data.sensor.SittingBoutTracker
@@ -41,8 +42,13 @@ class ContextEvaluationWorker(
             SensorDataSimulator.fromAssets(applicationContext)
                 .samplesBetween(now - SittingBoutTracker.LOOKBACK_MILLIS, now)
 
+        // The user's own "Take a break now" also ends a bout.
         val sittingBoutMinutes =
-            PostureClassifier.sittingBoutSeconds(samples) / 60
+            SittingBoutTracker.withManualBreak(
+                PostureClassifier.sittingBoutSeconds(samples),
+                now,
+                ManualBreakStore.read(applicationContext)
+            ) / 60
 
         val window =
             ContextEngine.complianceWindow(now)

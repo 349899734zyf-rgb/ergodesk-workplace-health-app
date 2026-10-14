@@ -10,6 +10,7 @@ import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.ActivityIngest
+import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.PostureState
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
@@ -92,12 +93,18 @@ class HomeViewModel(
                 .observeRecordsBetween(
                     complianceWindow.startMillis,
                     complianceWindow.endMillis
-                )
-        ) { live, todayRecord, history ->
+                ),
+            ManualBreakStore.observe(application)
+        ) { live, todayRecord, history, lastBreak ->
 
             HomeUiState.from(
                 posture = live.posture,
-                sittingBoutSeconds = live.sittingBoutSeconds,
+                sittingBoutSeconds =
+                    SittingBoutTracker.withManualBreak(
+                        live.sittingBoutSeconds,
+                        System.currentTimeMillis(),
+                        lastBreak
+                    ),
                 today = todayRecord,
                 history = history,
                 hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -116,11 +123,15 @@ class HomeViewModel(
             )
 
     /*
-     * "Take a break now": counts a completed break for today
-     * and clears the pending automatic reminder, since the
-     * user is already on a break. A manual snooze is kept.
+     * "Take a break now": restarts the sitting timer, counts
+     * a completed break for today and clears the pending
+     * automatic reminder, since the user is already on a
+     * break. A manual snooze is kept.
      */
     fun takeBreakNow() {
+
+        ManualBreakStore.record(getApplication(), System.currentTimeMillis())
+
         viewModelScope.launch {
 
             val existing =
@@ -138,7 +149,8 @@ class HomeViewModel(
 
             Log.d(
                 STATE_TAG,
-                "Break taken -> ${updated.breaksCompleted}/${updated.breakTarget} today, " +
+                "Break taken -> sitting timer restarted, " +
+                        "${updated.breaksCompleted}/${updated.breakTarget} breaks today, " +
                         "automatic reminder cleared"
             )
         }
