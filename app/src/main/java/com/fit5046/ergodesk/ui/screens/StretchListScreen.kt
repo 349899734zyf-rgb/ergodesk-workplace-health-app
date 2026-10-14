@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SelfImprovement
+import androidx.compose.material.icons.filled.WbSunny
+import com.fit5046.ergodesk.ui.viewmodel.WeatherViewModel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -177,11 +179,13 @@ object StretchDataProvider {
 @Composable
 fun StretchListScreen(
     onStretchClick: (String) -> Unit,
-    viewModel: StretchViewModel = viewModel()
+    viewModel: StretchViewModel = viewModel(),
+    weatherViewModel: WeatherViewModel = viewModel()
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val filteredList by viewModel.filteredStretches.collectAsState()
+    val weatherAdvice by weatherViewModel.weatherAdvice.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
 
     val categories = listOf("All", "Neck", "Shoulders", "Lower back", "Wrists", "Chest", "Legs")
@@ -237,7 +241,38 @@ fun StretchListScreen(
                     modifier = Modifier.padding(start = 38.dp, top = 2.dp)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // ---------------------------------------------------------
+                // Context-Aware Weather Advice Banner (Retrofit - Member 4)
+                // ---------------------------------------------------------
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 38.dp, top = 6.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFF1F8EE),
+                    border = BorderStroke(1.dp, Color(0xFFD4E7D0))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.WbSunny,
+                            contentDescription = null,
+                            tint = ErgoGreen,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Melbourne ${weatherAdvice.temperatureFormatted} · ${if (weatherAdvice.isOutdoorFriendly) "Mild weather: Pair with a quick walk" else "Indoor advice: Relieve desk tension with stretches"}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = ErgoTextPrimary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // ---------------------------------------------------------
                 // 3. Search Bar with Clean Border
