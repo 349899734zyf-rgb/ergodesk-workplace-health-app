@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
@@ -22,6 +22,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // WeatherAPI key for Member 4 external Retrofit web API integration
+        buildConfigField("String", "WEATHER_API_KEY", "\"54aec09c81644a1f99c12244261609\"")
     }
 
     buildTypes {
@@ -39,6 +42,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
