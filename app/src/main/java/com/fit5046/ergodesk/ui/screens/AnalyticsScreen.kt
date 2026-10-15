@@ -31,19 +31,29 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.analytics.ChartData
+import com.fit5046.ergodesk.data.analytics.TrendPoint
+import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.model.ActivityRecord
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
@@ -57,6 +67,8 @@ private val BreakBackground = Color(0xFFEAF7FA)
 private val InsightBackground = Color(0xFFEAF7E4)
 private val SelectorBackground = Color(0xFFF5F6F7)
 private val SecondaryText = Color(0xFF666B66)
+private val RelaxedThreshold = Color(0xFFD9822B)
+private val ChartGrid = Color(0xFFE6E8E6)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,11 +91,12 @@ fun AnalyticsScreen() {
     )
 
     /*
-     * Records come from ActivityRepository (prototype data
-     * until Room is merged). Each Flow is re-created when
-     * the selected period or date changes.
+     * Records come from ActivityRepository (Room). Each Flow
+     * is re-created when the selected period or date changes,
+     * and re-emits whenever a worker writes new minutes.
      */
-    val repository = RepositoryProvider.activityRepository
+    val context = LocalContext.current
+    val repository = remember { RepositoryProvider.activityRepository(context) }
 
     val currentRange = remember(selectedPeriod, selectedDateMillis) {
         AnalyticsCalculator.periodRange(selectedPeriod, selectedDateMillis)
@@ -137,6 +150,17 @@ fun AnalyticsScreen() {
     val chartData = AnalyticsCalculator.buildChartData(
         period = selectedPeriod,
         records = currentRecords
+    )
+
+    // Daily view charts the selected week, like Weekly Progress.
+    val breakTrend = AnalyticsCalculator.buildBreakTrend(
+        period = selectedPeriod,
+        records =
+            if (selectedPeriod == AnalyticsPeriod.DAILY) {
+                weekRecords
+            } else {
+                currentRecords
+            }
     )
 
     val dateLabel = AnalyticsCalculator.formatPeriodLabel(
@@ -400,11 +424,41 @@ fun AnalyticsScreen() {
                 modifier = Modifier.height(18.dp)
             )
 
+            Spacer(
+                modifier = Modifier.height(22.dp)
+            )
+
             Text(
-                text = "Prototype activity records are used for Assessment 2. " +
-                        "Daily, weekly and monthly results are dynamically calculated " +
-                        "from these records. Room and activity-sensing data can replace " +
-                        "the prototype data source in Assessment 4.",
+                text = "Break Completion Trend",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = "Breaks taken as a share of each day's target. The dashed lines " +
+                        "are the thresholds ErgoDesk uses to adapt your reminder interval.",
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                color = SecondaryText,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+
+            Spacer(
+                modifier = Modifier.height(10.dp)
+            )
+
+            BreakTrendChart(
+                points = breakTrend
+            )
+
+            Spacer(
+                modifier = Modifier.height(18.dp)
+            )
+
+            Text(
+                text = "Activity records are stored in Room. Today's minutes come from " +
+                        "simulated MotionSense sensor data, added every 15 minutes in the " +
+                        "background; earlier days are seeded demo history.",
                 fontSize = 10.sp,
                 lineHeight = 14.sp,
                 color = Color(0xFF8A8A8A)
@@ -935,6 +989,176 @@ private fun InsightCard(
                     fontSize = 12.sp,
                     lineHeight = 17.sp,
                     color = Color(0xFF303530)
+                )
+            }
+        }
+    }
+}
+
+/*
+ * Line chart of daily break completion. The dashed lines
+ * are ContextEngine's thresholds: below 40% reminders relax
+ * to 45 minutes, above 80% they tighten to 25 minutes.
+ */
+@Composable
+private fun BreakTrendChart(
+    points: List<TrendPoint>
+) {
+
+    if (points.isEmpty()) {
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(160.dp),
+            contentAlignment = Alignment.Center
+        ) {
+
+            Text(
+                text = "No break data available",
+                fontSize = 13.sp,
+                color = Color.Gray
+            )
+        }
+
+        return
+    }
+
+    val textMeasurer = rememberTextMeasurer()
+
+    val axisStyle =
+        TextStyle(fontSize = 10.sp, color = SecondaryText)
+
+    val thresholds = listOf(
+        Triple(
+            ContextEngine.LOW_COMPLIANCE * 100f,
+            RelaxedThreshold,
+            "Below ${(ContextEngine.LOW_COMPLIANCE * 100).toInt()}% → " +
+                    "${ContextEngine.RELAXED_INTERVAL_MINUTES}-min reminders"
+        ),
+        Triple(
+            ContextEngine.HIGH_COMPLIANCE * 100f,
+            ActiveGreen,
+            "Above ${(ContextEngine.HIGH_COMPLIANCE * 100).toInt()}% → " +
+                    "${ContextEngine.TIGHT_INTERVAL_MINUTES}-min reminders"
+        )
+    )
+
+    // A month has up to 31 points; label about one per week.
+    val labelEvery =
+        if (points.size > 10) 7 else 1
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+    ) {
+
+        val left = 36.dp.toPx()
+        val right = size.width - 8.dp.toPx()
+        val top = 8.dp.toPx()
+        val bottom = size.height - 22.dp.toPx()
+
+        fun yFor(percent: Float): Float =
+            bottom - (bottom - top) * percent / 100f
+
+        fun xFor(index: Int): Float =
+            if (points.size == 1) {
+                (left + right) / 2f
+            } else {
+                left + (right - left) * index / (points.size - 1)
+            }
+
+        // Grid lines with y-axis labels
+        listOf(0f, 50f, 100f).forEach { value ->
+
+            val y = yFor(value)
+
+            drawLine(
+                color = ChartGrid,
+                start = Offset(left, y),
+                end = Offset(right, y),
+                strokeWidth = 1.dp.toPx()
+            )
+
+            val label =
+                textMeasurer.measure("${value.toInt()}%", axisStyle)
+
+            drawText(
+                textLayoutResult = label,
+                topLeft = Offset(
+                    left - label.size.width - 6.dp.toPx(),
+                    y - label.size.height / 2f
+                )
+            )
+        }
+
+        // ContextEngine thresholds
+        thresholds.forEach { (value, color, text) ->
+
+            val y = yFor(value)
+
+            drawLine(
+                color = color,
+                start = Offset(left, y),
+                end = Offset(right, y),
+                strokeWidth = 1.5.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(8f, 6f))
+            )
+
+            val label =
+                textMeasurer.measure(text, axisStyle.copy(color = color))
+
+            drawText(
+                textLayoutResult = label,
+                topLeft = Offset(
+                    right - label.size.width,
+                    y - label.size.height - 2.dp.toPx()
+                )
+            )
+        }
+
+        // Completion line and daily points
+        val line = Path()
+
+        points.forEachIndexed { index, point ->
+            val x = xFor(index)
+            val y = yFor(point.percent)
+            if (index == 0) line.moveTo(x, y) else line.lineTo(x, y)
+        }
+
+        drawPath(
+            path = line,
+            color = ErgoGreen,
+            style = Stroke(
+                width = 2.5.dp.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round
+            )
+        )
+
+        points.forEachIndexed { index, point ->
+
+            val x = xFor(index)
+
+            drawCircle(
+                color = ErgoGreen,
+                radius = 3.5.dp.toPx(),
+                center = Offset(x, yFor(point.percent))
+            )
+
+            if (index % labelEvery == 0) {
+
+                val label =
+                    textMeasurer.measure(point.label, axisStyle)
+
+                drawText(
+                    textLayoutResult = label,
+                    topLeft = Offset(
+                        (x - label.size.width / 2f)
+                            .coerceIn(0f, size.width - label.size.width),
+                        bottom + 6.dp.toPx()
+                    )
                 )
             }
         }

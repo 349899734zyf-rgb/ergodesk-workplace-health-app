@@ -134,6 +134,28 @@ class SittingBoutTracker(
 
         const val DEFAULT_MIN_BREAK_SECONDS = 60
 
+        /*
+         * A bout can't have started before sinceMillis: the
+         * user's last "Take a break now" (they took a break
+         * even if the sensor missed it) or the moment they
+         * were first signed in on this device.
+         */
+        fun capSince(
+            sensorBoutSeconds: Int,
+            nowMillis: Long,
+            sinceMillis: Long?
+        ): Int {
+
+            if (sinceMillis == null) {
+                return sensorBoutSeconds
+            }
+
+            val secondsSince =
+                ((nowMillis - sinceMillis) / 1000L).coerceAtLeast(0L)
+
+            return minOf(sensorBoutSeconds.toLong(), secondsSince).toInt()
+        }
+
         // Long enough to see the start of a bout that runs
         // well past the relaxed 45-minute interval.
         const val LOOKBACK_MILLIS = 2 * 60 * 60 * 1000L

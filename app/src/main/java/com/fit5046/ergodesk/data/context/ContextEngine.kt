@@ -22,12 +22,14 @@ enum class HoldReason {
 }
 
 /*
- * Current weather from the Open-Meteo cache, reduced to
- * what the walk rule needs.
+ * Latest weather from the cache WeatherSyncWorker fills.
+ * isOutdoorFriendly comes from WeatherRepository (Member 4),
+ * so the Home weather card and break suggestions agree.
  */
 data class WeatherSnapshot(
     val temperatureC: Double,
-    val precipitationMm: Double
+    val condition: String,
+    val isOutdoorFriendly: Boolean
 )
 
 /*
@@ -83,12 +85,9 @@ object ContextEngine {
     val DEFAULT_QUIET_HOURS = QuietHours(startHour = 22, endHour = 7)
 
     // Outdoor walks are only suggested in daylight working
-    // hours, when it is dry and neither cold nor hot.
+    // hours, and only when the weather suits one.
     private const val WALK_FIRST_HOUR = 8
     private const val WALK_LAST_HOUR = 18
-    private const val WALK_MIN_TEMP_C = 10.0
-    private const val WALK_MAX_TEMP_C = 28.0
-    private const val WALK_MAX_PRECIPITATION_MM = 0.1
 
     fun evaluate(
         input: ContextInput
@@ -172,8 +171,7 @@ object ContextEngine {
         }
 
         return hourOfDay in WALK_FIRST_HOUR..WALK_LAST_HOUR &&
-                weather.precipitationMm <= WALK_MAX_PRECIPITATION_MM &&
-                weather.temperatureC in WALK_MIN_TEMP_C..WALK_MAX_TEMP_C
+                weather.isOutdoorFriendly
     }
 
     /*

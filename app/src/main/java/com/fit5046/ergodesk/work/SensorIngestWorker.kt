@@ -13,6 +13,7 @@ import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.ActivityIngest
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
+import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
@@ -34,15 +35,31 @@ class SensorIngestWorker(
         val now =
             System.currentTimeMillis()
 
+        val user =
+            CurrentUser.get(applicationContext)
+
+        if (user == null) {
+            Log.d(TAG, "No one signed in -> skipped")
+            return Result.success()
+        }
+
+        // Only time since the account was first signed in here counts.
+        val windowStart =
+            maxOf(now - WINDOW_MILLIS, user.trackingStartMillis)
+
+        if (windowStart >= now) {
+            return Result.success()
+        }
+
         val samples =
             SensorDataSimulator.fromAssets(applicationContext)
-                .samplesBetween(now - WINDOW_MILLIS, now)
+                .samplesBetween(windowStart, now)
 
         val summary =
             PostureClassifier.summarize(samples)
 
         val repository =
-            RepositoryProvider.activityRepository
+            RepositoryProvider.activityRepository(applicationContext)
 
         val today =
             AnalyticsCalculator.periodRange(AnalyticsPeriod.DAILY, now)

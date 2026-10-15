@@ -4,19 +4,21 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.fit5046.ergodesk.data.model.ActivityRecordEntity
 import com.fit5046.ergodesk.data.model.StretchItemEntity
 import com.fit5046.ergodesk.data.room.Assessment
 import com.fit5046.ergodesk.data.room.AssessmentDAO
 
 @Database(
-    entities = [StretchItemEntity::class, Assessment::class],
-    version = 2,
+    entities = [StretchItemEntity::class, Assessment::class, ActivityRecordEntity::class],
+    version = 4,
     exportSchema = false
 )
 abstract class ErgoDeskDatabase : RoomDatabase() {
 
     abstract fun stretchDao(): StretchDao
     abstract fun assessmentDAO(): AssessmentDAO
+    abstract fun activityRecordDao(): ActivityRecordDao
 
     companion object {
         @Volatile
