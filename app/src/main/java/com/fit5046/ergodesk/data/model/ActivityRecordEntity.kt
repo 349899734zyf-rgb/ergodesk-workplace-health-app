@@ -1,20 +1,22 @@
 package com.fit5046.ergodesk.data.model
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 
 /*
- * Room row for one day's activity summary.
+ * Room row for one account's activity on one day.
  *
- * The primary key is the start of that local day, so an
- * upsert for the same day replaces the row instead of
- * adding a second one.
+ * The primary key is (account, start of that local day),
+ * so an upsert for the same day replaces the row instead
+ * of adding a second one, and accounts never share rows.
  */
-@Entity(tableName = "activity_records")
+@Entity(
+    tableName = "activity_records",
+    primaryKeys = ["userId", "dayStartMillis"]
+)
 data class ActivityRecordEntity(
-    @PrimaryKey
+    val userId: String,
     val dayStartMillis: Long,
     val timestamp: Long,
     val sittingMinutes: Int,
@@ -36,9 +38,11 @@ data class ActivityRecordEntity(
     companion object {
 
         fun from(
-            record: ActivityRecord
+            record: ActivityRecord,
+            userId: String
         ): ActivityRecordEntity {
             return ActivityRecordEntity(
+                userId = userId,
                 dayStartMillis =
                     AnalyticsCalculator
                         .periodRange(AnalyticsPeriod.DAILY, record.timestamp)

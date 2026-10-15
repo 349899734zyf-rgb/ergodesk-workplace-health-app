@@ -1,49 +1,53 @@
 package com.fit5046.ergodesk.data.sensor
 
 import android.content.Context
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 /*
- * When the user last pressed "Take a break now".
+ * When each account last pressed "Take a break now".
  *
  * Kept in SharedPreferences so ContextEvaluationWorker
  * sees it even after a process restart, and exposed as a
- * StateFlow so Home restarts its sitting timer at once.
+ * Flow so Home restarts its sitting timer at once.
  */
 object ManualBreakStore {
 
     private const val PREFS_NAME = "manual_break"
-    private const val KEY_LAST_BREAK = "last_break_millis"
+    private const val KEY_PREFIX = "last_break_millis_"
 
-    private val lastBreak =
-        MutableStateFlow<Long?>(null)
+    private val lastBreaks =
+        MutableStateFlow<Map<String, Long>>(emptyMap())
 
     @Volatile
     private var loaded = false
 
     fun observe(
-        context: Context
-    ): StateFlow<Long?> {
+        context: Context,
+        userId: String
+    ): Flow<Long?> {
         load(context)
-        return lastBreak.asStateFlow()
+        return lastBreaks.map { it[userId] }.distinctUntilChanged()
     }
 
     fun read(
-        context: Context
+        context: Context,
+        userId: String
     ): Long? {
         load(context)
-        return lastBreak.value
+        return lastBreaks.value[userId]
     }
 
     fun record(
         context: Context,
+        userId: String,
         timeMillis: Long
     ) {
         load(context)
-        prefs(context).edit().putLong(KEY_LAST_BREAK, timeMillis).apply()
-        lastBreak.value = timeMillis
+        prefs(context).edit().putLong(KEY_PREFIX + userId, timeMillis).apply()
+        lastBreaks.value = lastBreaks.value + (userId to timeMillis)
     }
 
     private fun load(
@@ -54,8 +58,13 @@ object ManualBreakStore {
         }
         synchronized(this) {
             if (!loaded) {
-                lastBreak.value =
-                    prefs(context).getLong(KEY_LAST_BREAK, 0L).takeIf { it > 0L }
+                lastBreaks.value =
+                    prefs(context).all
+                        .filterKeys { it.startsWith(KEY_PREFIX) }
+                        .mapNotNull { (key, value) ->
+                            (value as? Long)?.let { key.removePrefix(KEY_PREFIX) to it }
+                        }
+                        .toMap()
                 loaded = true
             }
         }

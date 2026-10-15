@@ -16,6 +16,7 @@ import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
 import com.fit5046.ergodesk.data.sensor.SittingBoutTracker
+import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -38,16 +39,32 @@ class ContextEvaluationWorker(
         val now =
             System.currentTimeMillis()
 
+        val user =
+            CurrentUser.get()
+
+        if (user == null) {
+            BreakAlarmScheduler.cancelBreakReminder(applicationContext, automatic = true)
+            Log.d(TAG, "No one signed in -> skipped, automatic reminder cleared")
+            return Result.success()
+        }
+
         val samples =
             SensorDataSimulator.fromAssets(applicationContext)
                 .samplesBetween(now - SittingBoutTracker.LOOKBACK_MILLIS, now)
 
-        // The user's own "Take a break now" also ends a bout.
+        // A bout ends at the user's own "Take a break now" and
+        // never starts before their account existed.
+        val boutSince =
+            listOfNotNull(
+                ManualBreakStore.read(applicationContext, user.uid),
+                user.trackingStartMillis
+            ).maxOrNull()
+
         val sittingBoutMinutes =
-            SittingBoutTracker.withManualBreak(
+            SittingBoutTracker.capSince(
                 PostureClassifier.sittingBoutSeconds(samples),
                 now,
-                ManualBreakStore.read(applicationContext)
+                boutSince
             ) / 60
 
         val window =

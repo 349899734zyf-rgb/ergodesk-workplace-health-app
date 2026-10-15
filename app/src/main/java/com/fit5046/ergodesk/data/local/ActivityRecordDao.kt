@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * Data Access Object (DAO) for daily activity summaries.
+ * Every query is limited to one account.
  */
 @Dao
 interface ActivityRecordDao {
@@ -20,10 +21,12 @@ interface ActivityRecordDao {
      */
     @Query(
         "SELECT * FROM activity_records " +
-                "WHERE timestamp >= :startMillis AND timestamp < :endMillis " +
+                "WHERE userId = :userId " +
+                "AND timestamp >= :startMillis AND timestamp < :endMillis " +
                 "ORDER BY timestamp"
     )
     fun observeBetween(
+        userId: String,
         startMillis: Long,
         endMillis: Long
     ): Flow<List<ActivityRecordEntity>>
@@ -34,6 +37,6 @@ interface ActivityRecordDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(records: List<ActivityRecordEntity>)
 
-    @Query("SELECT COUNT(*) FROM activity_records")
-    suspend fun count(): Int
+    @Query("SELECT COUNT(*) FROM activity_records WHERE userId = :userId")
+    suspend fun countFor(userId: String): Int
 }

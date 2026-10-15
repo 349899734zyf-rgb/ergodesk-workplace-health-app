@@ -120,7 +120,7 @@ private fun HomeContent(
     state: HomeUiState,
     weatherAdvice: WeatherAdvice,
     sessions: List<ActivitySession>,
-    onTakeBreak: () -> Unit
+    onTakeBreak: () -> Boolean
 ) {
 
     val context = LocalContext.current
@@ -419,11 +419,15 @@ private fun HomeContent(
                     Button(
                         onClick = {
 
-                            onTakeBreak()
+                            val logged = onTakeBreak()
 
                             Toast.makeText(
                                 context,
-                                "Break logged. Enjoy a short stretch!",
+                                if (logged) {
+                                    "Break logged. Enjoy a short stretch!"
+                                } else {
+                                    "Break already logged in the last 5 minutes"
+                                },
                                 Toast.LENGTH_SHORT
                             ).show()
                         },
@@ -669,7 +673,7 @@ private fun HomeScreenPreview() {
                 ActivitySession(SessionType.BREAK, 35_160_000L, 35_520_000L),
                 ActivitySession(SessionType.SITTING, 35_520_000L, 38_340_000L)
             ),
-            onTakeBreak = {}
+            onTakeBreak = { true }
         )
     }
 }

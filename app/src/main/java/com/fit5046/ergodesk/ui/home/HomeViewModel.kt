@@ -17,6 +17,7 @@ import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.PostureState
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
 import com.fit5046.ergodesk.data.sensor.SittingBoutTracker
+import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,6 +27,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -47,6 +49,10 @@ class HomeViewModel(
 
     private val startMillis =
         System.currentTimeMillis()
+
+    // Home is only reachable after login, but stay safe.
+    private val user =
+        CurrentUser.get()
 
     // Fixed when Home opens; a screen left open past
     // midnight keeps showing the previous day.
@@ -97,16 +103,23 @@ class HomeViewModel(
                     complianceWindow.startMillis,
                     complianceWindow.endMillis
                 ),
-            ManualBreakStore.observe(application)
+            user
+                ?.let { ManualBreakStore.observe(application, it.uid) }
+                ?: flowOf(null)
         ) { live, todayRecord, history, lastBreak ->
+
+            // A bout ends at the user's own "Take a break now"
+            // and never starts before their account existed.
+            val boutSince =
+                listOfNotNull(lastBreak, user?.trackingStartMillis).maxOrNull()
 
             HomeUiState.from(
                 posture = live.posture,
                 sittingBoutSeconds =
-                    SittingBoutTracker.withManualBreak(
+                    SittingBoutTracker.capSince(
                         live.sittingBoutSeconds,
                         System.currentTimeMillis(),
-                        lastBreak
+                        boutSince
                     ),
                 today = todayRecord,
                 history = history,
@@ -127,8 +140,9 @@ class HomeViewModel(
 
     /*
      * Today's sitting and break sessions, oldest first, for
-     * the timeline and "Longest sit". Rebuilt from the
-     * sensor samples since midnight once a minute.
+     * the timeline and "Longest sit". Rebuilt once a minute
+     * from the sensor samples since midnight, or since the
+     * account was created if that was later today.
      */
     val todaySessions: StateFlow<List<ActivitySession>> =
         flow {
@@ -139,11 +153,22 @@ class HomeViewModel(
                 val now =
                     System.currentTimeMillis()
 
+                // Samples fall on whole seconds.
+                val firstSecondMillis =
+                    Math.floorDiv(
+                        maxOf(today.startMillis, user?.trackingStartMillis ?: 0L) + 999L,
+                        1000L
+                    ) * 1000L
+
                 emit(
-                    ActivitySessions.fromSamples(
-                        samples = simulator.samplesBetween(today.startMillis, now),
-                        firstSampleMillis = today.startMillis
-                    )
+                    if (user == null || firstSecondMillis >= now) {
+                        emptyList()
+                    } else {
+                        ActivitySessions.fromSamples(
+                            samples = simulator.samplesBetween(firstSecondMillis, now),
+                            firstSampleMillis = firstSecondMillis
+                        )
+                    }
                 )
 
                 delay(SESSIONS_REFRESH_MILLIS)
@@ -168,10 +193,28 @@ class HomeViewModel(
      * a completed break for today and clears the pending
      * automatic reminder, since the user is already on a
      * break. A manual snooze is kept.
+     *
+     * Returns false, and counts nothing, when the last break
+     * was under BREAK_COOLDOWN_MILLIS ago, so repeated taps
+     * don't inflate break compliance.
      */
-    fun takeBreakNow() {
+    fun takeBreakNow(): Boolean {
 
-        ManualBreakStore.record(getApplication(), System.currentTimeMillis())
+        val account =
+            user ?: return false
+
+        val now =
+            System.currentTimeMillis()
+
+        val lastBreak =
+            ManualBreakStore.read(getApplication(), account.uid)
+
+        if (lastBreak != null && now - lastBreak < BREAK_COOLDOWN_MILLIS) {
+            Log.d(STATE_TAG, "Break ignored -> last one was under 5 min ago")
+            return false
+        }
+
+        ManualBreakStore.record(getApplication(), account.uid, now)
 
         viewModelScope.launch {
 
@@ -182,7 +225,7 @@ class HomeViewModel(
                     .firstOrNull()
 
             val updated =
-                ActivityIngest.addBreak(existing, System.currentTimeMillis())
+                ActivityIngest.addBreak(existing, now)
 
             repository.upsertRecord(updated)
 
@@ -195,10 +238,13 @@ class HomeViewModel(
                         "automatic reminder cleared"
             )
         }
+
+        return true
     }
 
     private companion object {
         const val STATE_TAG = "HomeState"
         const val SESSIONS_REFRESH_MILLIS = 60_000L
+        const val BREAK_COOLDOWN_MILLIS = 5 * 60 * 1000L
     }
 }
