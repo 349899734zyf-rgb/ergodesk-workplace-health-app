@@ -1,20 +1,20 @@
 {
   "project_info": {
-    "project_number": "969866668969",
-    "project_id": "sit313-task-7-1p-372c1",
-    "storage_bucket": "sit313-task-7-1p-372c1.firebasestorage.app"
+    "project_number": "915511787735",
+    "project_id": "fit5032-f556e",
+    "storage_bucket": "fit5032-f556e.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:969866668969:android:77762e8540acd339ad72b8",
+        "mobilesdk_app_id": "1:915511787735:android:4661e59a72e2aa34157092",
         "android_client_info": {
           "package_name": "com.fit5046.ergodesk"
         }
       },
       "oauth_client": [
         {
-          "client_id": "969866668969-u6gjqpff581178ud4uqb145v89b0f8e4.apps.googleusercontent.com",
+          "client_id": "915511787735-8r4es282nnhbo6du9sudk1r8aec3nqsc.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.fit5046.ergodesk",
@@ -22,20 +22,20 @@
           }
         },
         {
-          "client_id": "969866668969-968m41v90qbmtrmmonuphigagjmo5gkf.apps.googleusercontent.com",
+          "client_id": "915511787735-vje9b1ucjsar705780rhn8168qfa55pq.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDCObggWJ9DkE3uEih54XQhSDLWmOUf5Zg"
+          "current_key": "AIzaSyAbzzDPxfu108wpqEl95DScAOvC6OKypjY"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "969866668969-968m41v90qbmtrmmonuphigagjmo5gkf.apps.googleusercontent.com",
+              "client_id": "915511787735-vje9b1ucjsar705780rhn8168qfa55pq.apps.googleusercontent.com",
               "client_type": 3
             }
           ]
