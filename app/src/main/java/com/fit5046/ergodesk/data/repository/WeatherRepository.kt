@@ -1,8 +1,11 @@
 package com.fit5046.ergodesk.data.repository
 
+import com.fit5046.ergodesk.BuildConfig
+import com.fit5046.ergodesk.data.context.WeatherSnapshot
 import com.fit5046.ergodesk.data.network.WeatherRetrofitObject
 import com.fit5046.ergodesk.data.network.model.WeatherAdvice
 import com.fit5046.ergodesk.data.network.model.WeatherResponse
+import java.util.Calendar
 import kotlin.math.roundToInt
 
 /**
@@ -10,12 +13,17 @@ import kotlin.math.roundToInt
  * Connects Retrofit networking with the UI presentation layer.
  * Member 4 responsibility.
  */
-class WeatherRepository {
+class WeatherRepository(
+    private val apiKey: String = BuildConfig.WEATHER_API_KEY
+) {
 
     private val weatherService = WeatherRetrofitObject.retrofitService
 
-    // WeatherAPI key configured from FIT5046 unit resources
-    private val apiKey = "54aec09c81644a1f99c12244261609"
+    companion object {
+        // Daylight walking hours matching ContextEngine (08:00 - 18:00)
+        const val WALK_FIRST_HOUR = 8
+        const val WALK_LAST_HOUR = 18
+    }
 
     suspend fun getWeather(cityName: String = "Melbourne"): Result<WeatherResponse> {
         return try {
@@ -28,9 +36,13 @@ class WeatherRepository {
 
     /**
      * Context-aware computing logic: Generates break and stretch suggestions
-     * based on live temperature, atmospheric conditions, and UV rating.
+     * based on live temperature, atmospheric conditions, UV rating, and time of day.
+     * Aligns with ContextEngine daylight hours (08:00 - 18:00).
      */
-    fun deriveErgonomicAdvice(weather: WeatherResponse): WeatherAdvice {
+    fun deriveErgonomicAdvice(
+        weather: WeatherResponse,
+        hourOfDay: Int = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    ): WeatherAdvice {
         val temp = weather.current.tempC
         val tempRounded = temp.roundToInt()
         val conditionText = weather.current.condition.text
@@ -41,7 +53,8 @@ class WeatherRepository {
                 conditionText.contains("storm", ignoreCase = true) ||
                 conditionText.contains("snow", ignoreCase = true)
 
-        val isOutdoorSuitable = (temp in 16.0..28.0) && !isRainingOrStormy
+        val isDaylightWalkingHours = hourOfDay in WALK_FIRST_HOUR..WALK_LAST_HOUR
+        val isOutdoorSuitable = (temp in 16.0..28.0) && !isRainingOrStormy && isDaylightWalkingHours
 
         return if (isOutdoorSuitable) {
             WeatherAdvice(
@@ -51,10 +64,14 @@ class WeatherRepository {
                 isOutdoorFriendly = true
             )
         } else {
-            val reason = if (isRainingOrStormy) "Wet outdoor conditions" else "Cool/Hot outdoor air"
+            val reason = when {
+                !isDaylightWalkingHours -> "Evening/Night hours"
+                isRainingOrStormy -> "Wet outdoor conditions"
+                else -> "Cool/Hot outdoor air"
+            }
             WeatherAdvice(
                 temperatureFormatted = "$tempRounded°",
-                headline = "Recommended indoor desk stretch",
+                headline = if (!isDaylightWalkingHours) "Evening indoor desk stretch" else "Recommended indoor desk stretch",
                 subtitle = "$tempRounded °C, ${conditionText.lowercase()} · $reason: Relax your neck & back",
                 isOutdoorFriendly = false
             )
@@ -62,14 +79,42 @@ class WeatherRepository {
     }
 
     /**
-     * Offline fallback suggestion in case of no internet connectivity.
+     * Maps cached WeatherSnapshot to UI presentation model.
      */
-    fun getFallbackAdvice(): WeatherAdvice {
+    fun adviceFromSnapshot(snapshot: WeatherSnapshot): WeatherAdvice {
+        val tempRounded = snapshot.temperatureC.roundToInt()
+        return if (snapshot.isOutdoorFriendly) {
+            WeatherAdvice(
+                temperatureFormatted = "$tempRounded°",
+                headline = "Good time for an outdoor break",
+                subtitle = "$tempRounded °C, ${snapshot.condition.lowercase()} · Ideal for a 5-min walk",
+                isOutdoorFriendly = true
+            )
+        } else {
+            WeatherAdvice(
+                temperatureFormatted = "$tempRounded°",
+                headline = "Recommended indoor desk stretch",
+                subtitle = "$tempRounded °C, ${snapshot.condition.lowercase()} · Relax your neck & back",
+                isOutdoorFriendly = false
+            )
+        }
+    }
+
+    /**
+     * Fallback suggestion when API is unreachable or offline.
+     * Displays "--" and "Weather unavailable" instead of misleading mock data.
+     */
+    fun getUnavailableAdvice(): WeatherAdvice {
         return WeatherAdvice(
-            temperatureFormatted = "21°",
-            headline = "Good time for an outdoor break",
-            subtitle = "21 °C, pleasant · Ideal time to stand and stretch",
-            isOutdoorFriendly = true
+            temperatureFormatted = "--",
+            headline = "Weather unavailable",
+            subtitle = "Offline or API unreachable · Recommend indoor desk stretch",
+            isOutdoorFriendly = false
         )
     }
+
+    /**
+     * Backward-compatible alias for getUnavailableAdvice().
+     */
+    fun getFallbackAdvice(): WeatherAdvice = getUnavailableAdvice()
 }
