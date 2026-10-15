@@ -58,6 +58,8 @@ import com.fit5046.ergodesk.data.model.ActivityRecord
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
 import com.fit5046.ergodesk.ui.theme.ErgoGreenLight
+import java.util.Locale
+import kotlin.math.roundToInt
 
 private val SittingPink = Color(0xFFF4B7B7)
 private val SittingBackground = Color(0xFFFFF1F1)
@@ -456,9 +458,10 @@ fun AnalyticsScreen() {
             )
 
             Text(
-                text = "Activity records are stored in Room. Today's minutes come from " +
-                        "simulated MotionSense sensor data, added every 15 minutes in the " +
-                        "background; earlier days are seeded demo history.",
+                text = "Activity records are stored in Room for your account. Minutes come " +
+                        "from simulated MotionSense sensor data and are updated every 15 " +
+                        "minutes in the background. The demo account also includes sample " +
+                        "history for earlier days.",
                 fontSize = 10.sp,
                 lineHeight = 14.sp,
                 color = Color(0xFF8A8A8A)
@@ -819,6 +822,11 @@ private fun AnalyticsBarChart(
             ?.coerceAtLeast(1f)
             ?: 1f
 
+    val textMeasurer = rememberTextMeasurer()
+
+    val axisStyle =
+        TextStyle(fontSize = 10.sp, color = SecondaryText)
+
     Column {
 
         Canvas(
@@ -826,7 +834,7 @@ private fun AnalyticsBarChart(
                 .fillMaxWidth()
                 .height(170.dp)
                 .padding(
-                    start = 16.dp,
+                    start = 40.dp,
                     end = 8.dp,
                     top = 8.dp
                 )
@@ -863,6 +871,24 @@ private fun AnalyticsBarChart(
                     ),
                     strokeWidth = 1.dp.toPx()
                 )
+
+                // Axis label on every other grid line.
+                if (i % 2 == 0) {
+
+                    val label =
+                        textMeasurer.measure(
+                            formatAxisHours(maxValue * i / 4f),
+                            axisStyle
+                        )
+
+                    drawText(
+                        textLayoutResult = label,
+                        topLeft = Offset(
+                            -label.size.width - 6.dp.toPx(),
+                            y - label.size.height / 2f
+                        )
+                    )
+                }
             }
 
             chartData.sittingValues.indices.forEach { index ->
@@ -915,8 +941,11 @@ private fun AnalyticsBarChart(
             }
         }
 
+        // Same side padding as the Canvas, so labels sit under their bars.
         Row(
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 40.dp, end = 8.dp)
         ) {
 
             chartData.labels.forEach { label ->
@@ -992,6 +1021,20 @@ private fun InsightCard(
                 )
             }
         }
+    }
+}
+
+/*
+ * Bar chart values are in hours; short spans read better
+ * in minutes.
+ */
+private fun formatAxisHours(
+    hours: Float
+): String {
+    return if (hours < 1f) {
+        "${(hours * 60).roundToInt()}m"
+    } else {
+        String.format(Locale.ENGLISH, "%.1fh", hours)
     }
 }
 
@@ -1224,7 +1267,7 @@ private fun BreakProgressSection(
         AnalyticsPeriod.MONTHLY -> {
 
             val weeklyGroups =
-                currentRecords.chunked(7)
+                AnalyticsCalculator.groupByCalendarWeek(currentRecords)
 
             if (weeklyGroups.isEmpty()) {
 

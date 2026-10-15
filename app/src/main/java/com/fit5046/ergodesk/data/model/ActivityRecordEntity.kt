@@ -22,7 +22,10 @@ data class ActivityRecordEntity(
     val sittingMinutes: Int,
     val activeMinutes: Int,
     val breaksCompleted: Int,
-    val breakTarget: Int
+    val breakTarget: Int,
+    // 24 comma-separated minute values, or "" when unknown.
+    val hourlySitting: String = "",
+    val hourlyActive: String = ""
 ) {
 
     fun toRecord(): ActivityRecord {
@@ -31,7 +34,9 @@ data class ActivityRecordEntity(
             sittingMinutes = sittingMinutes,
             activeMinutes = activeMinutes,
             breaksCompleted = breaksCompleted,
-            breakTarget = breakTarget
+            breakTarget = breakTarget,
+            hourlySittingMinutes = parseHourly(hourlySitting),
+            hourlyActiveMinutes = parseHourly(hourlyActive)
         )
     }
 
@@ -51,8 +56,20 @@ data class ActivityRecordEntity(
                 sittingMinutes = record.sittingMinutes,
                 activeMinutes = record.activeMinutes,
                 breaksCompleted = record.breaksCompleted,
-                breakTarget = record.breakTarget
+                breakTarget = record.breakTarget,
+                hourlySitting = record.hourlySittingMinutes.joinToString(","),
+                hourlyActive = record.hourlyActiveMinutes.joinToString(",")
             )
+        }
+
+        private fun parseHourly(
+            text: String
+        ): List<Int> {
+            return if (text.isBlank()) {
+                emptyList()
+            } else {
+                text.split(",").map { it.trim().toIntOrNull() ?: 0 }
+            }
         }
     }
 }

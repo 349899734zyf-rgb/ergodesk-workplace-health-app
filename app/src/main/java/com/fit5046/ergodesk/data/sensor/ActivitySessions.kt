@@ -46,6 +46,15 @@ data class SessionSummary(
 }
 
 /*
+ * Minutes of sitting and of being active in each hour of a
+ * day (24 values each), for the Analytics daily chart.
+ */
+data class HourlyActivity(
+    val sittingMinutes: List<Int>,
+    val activeMinutes: List<Int>
+)
+
+/*
  * Splits a day of 1-second sensor samples into sitting and
  * break sessions. Pure Kotlin apart from reading samples
  * from the simulator.
@@ -243,6 +252,53 @@ object ActivitySessions {
 
         return result
     }
+
+    /*
+     * Splits the day's sessions at hour boundaries. Hours are
+     * counted from dayStartMillis, so a daylight-saving day
+     * still maps onto 24 slots.
+     */
+    fun hourly(
+        sessions: List<ActivitySession>,
+        dayStartMillis: Long
+    ): HourlyActivity {
+
+        val sittingSeconds = LongArray(24)
+        val activeSeconds = LongArray(24)
+
+        sessions.forEach { session ->
+
+            var start = session.startMillis
+
+            while (start < session.endMillis) {
+
+                val hour =
+                    ((start - dayStartMillis) / HOUR_MILLIS).toInt().coerceIn(0, 23)
+
+                val hourEnd =
+                    minOf(dayStartMillis + (hour + 1) * HOUR_MILLIS, session.endMillis)
+                        .coerceAtLeast(start + 1000L)
+
+                val seconds =
+                    (minOf(hourEnd, session.endMillis) - start) / 1000L
+
+                if (session.type == SessionType.SITTING) {
+                    sittingSeconds[hour] += seconds
+                } else {
+                    activeSeconds[hour] += seconds
+                }
+
+                start = hourEnd
+            }
+        }
+
+        return HourlyActivity(
+            sittingMinutes = sittingSeconds.map { (it / 60L).toInt() },
+            activeMinutes = activeSeconds.map { (it / 60L).toInt() }
+        )
+    }
+
+    private const val HOUR_MILLIS = 60 * 60 * 1000L
 
     fun summarize(
         sessions: List<ActivitySession>

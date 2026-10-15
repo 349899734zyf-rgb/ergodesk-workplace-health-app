@@ -22,6 +22,7 @@ object ActivityIngest {
     fun withTodayTotals(
         existing: ActivityRecord?,
         summary: SessionSummary,
+        hourly: HourlyActivity,
         nowMillis: Long
     ): ActivityRecord {
 
@@ -30,7 +31,9 @@ object ActivityIngest {
 
         return base.copy(
             sittingMinutes = (summary.sittingSeconds / 60L).toInt(),
-            activeMinutes = (summary.activeSeconds / 60L).toInt()
+            activeMinutes = (summary.activeSeconds / 60L).toInt(),
+            hourlySittingMinutes = hourly.sittingMinutes,
+            hourlyActiveMinutes = hourly.activeMinutes
         )
     }
 

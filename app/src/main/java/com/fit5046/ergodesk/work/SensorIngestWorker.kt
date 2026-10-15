@@ -84,7 +84,12 @@ class SensorIngestWorker(
                 .firstOrNull()
 
         val updated =
-            ActivityIngest.withTodayTotals(existing, summary, now)
+            ActivityIngest.withTodayTotals(
+                existing = existing,
+                summary = summary,
+                hourly = ActivitySessions.hourly(sessions, today.startMillis),
+                nowMillis = now
+            )
 
         repository.upsertRecord(updated)
 

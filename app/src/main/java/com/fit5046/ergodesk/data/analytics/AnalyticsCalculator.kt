@@ -187,33 +187,41 @@ object AnalyticsCalculator {
 
             AnalyticsPeriod.DAILY -> {
 
-                /*
-                 * A daily ActivityRecord only stores daily totals,
-                 * so the total is spread over time blocks using
-                 * weights. Replace with real hourly data once
-                 * activity sensing records it.
-                 */
                 val record =
                     records.first()
 
-                val sittingWeights =
-                    listOf(0.15f, 0.19f, 0.17f, 0.18f, 0.16f, 0.15f)
+                if (record.hourlySittingMinutes.size == 24 &&
+                    record.hourlyActiveMinutes.size == 24
+                ) {
 
-                val activeWeights =
-                    listOf(0.08f, 0.10f, 0.19f, 0.22f, 0.20f, 0.21f)
+                    // Real sensor minutes, three hours per bar.
+                    val blocks =
+                        (0 until 24 step HOURS_PER_BLOCK).toList()
 
-                ChartData(
-                    sittingValues =
-                        sittingWeights.map {
-                            record.sittingMinutes * it / 60f
-                        },
-                    activeValues =
-                        activeWeights.map {
-                            record.activeMinutes * it / 60f
-                        },
-                    labels =
-                        listOf("8am", "10am", "12pm", "2pm", "4pm", "6pm")
-                )
+                    ChartData(
+                        sittingValues =
+                            blocks.map { start ->
+                                record.hourlySittingMinutes
+                                    .subList(start, start + HOURS_PER_BLOCK).sum() / 60f
+                            },
+                        activeValues =
+                            blocks.map { start ->
+                                record.hourlyActiveMinutes
+                                    .subList(start, start + HOURS_PER_BLOCK).sum() / 60f
+                            },
+                        labels =
+                            blocks.map { hourLabel(it) }
+                    )
+                } else {
+
+                    // No hourly detail for this day (e.g. demo
+                    // history): show the day's totals only.
+                    ChartData(
+                        sittingValues = listOf(record.sittingMinutes / 60f),
+                        activeValues = listOf(record.activeMinutes / 60f),
+                        labels = listOf("All day")
+                    )
+                }
             }
 
             AnalyticsPeriod.WEEKLY -> {
@@ -231,7 +239,7 @@ object AnalyticsCalculator {
             AnalyticsPeriod.MONTHLY -> {
 
                 val weeklyGroups =
-                    records.chunked(7)
+                    groupByCalendarWeek(records)
 
                 ChartData(
                     sittingValues =
@@ -247,6 +255,36 @@ object AnalyticsCalculator {
                 )
             }
         }
+    }
+
+    private const val HOURS_PER_BLOCK = 3
+
+    private fun hourLabel(
+        hour: Int
+    ): String {
+        return when {
+            hour == 0 -> "12am"
+            hour < 12 -> "${hour}am"
+            hour == 12 -> "12pm"
+            else -> "${hour - 12}pm"
+        }
+    }
+
+    /*
+     * Records grouped by calendar week (Monday start), oldest
+     * first, so a month with missing days still lines up
+     * with real weeks.
+     */
+    fun groupByCalendarWeek(
+        records: List<ActivityRecord>
+    ): List<List<ActivityRecord>> {
+
+        return records
+            .sortedBy { it.timestamp }
+            .groupBy { periodRange(AnalyticsPeriod.WEEKLY, it.timestamp).startMillis }
+            .toSortedMap()
+            .values
+            .toList()
     }
 
     /* ---------------- Break trend ---------------- */

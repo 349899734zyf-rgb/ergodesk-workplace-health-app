@@ -20,7 +20,9 @@ import com.fit5046.ergodesk.data.sensor.TrackingLog
 import com.fit5046.ergodesk.data.settings.SettingsRepository
 import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.concurrent.TimeUnit
 
 /*
@@ -112,16 +114,28 @@ class ContextEvaluationWorker(
                 )
             )
 
+        val delayMinutes =
+            decision.minutesUntilDue.coerceAtLeast(0).toLong()
+
+        // The alarm rings later than now, so check that moment
+        // too: it must not fall in quiet hours or on a day off.
+        val dueAtMillis =
+            now + delayMinutes * 60_000L
+
+        val heldWhenDue =
+            ContextEngine.isQuietTime(ContextEngine.minuteOfDay(dueAtMillis), settings.quietHours) ||
+                    (settings.calendarAware && DayOffCalendar.dayOffReason(
+                        Instant.ofEpochMilli(dueAtMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+                    ) != null)
+
         // A due-time before the next run gets an alarm; any
         // other outcome clears a stale one, e.g. the user
         // has since taken a break or a meeting started.
         val scheduled =
             decision.holdReason == null &&
+                    !heldWhenDue &&
                     sittingBoutMinutes > 0 &&
                     decision.minutesUntilDue <= PERIOD_MINUTES
-
-        val delayMinutes =
-            decision.minutesUntilDue.coerceAtLeast(0).toLong()
 
         if (scheduled) {
             // TODO(Suzie): pass decision.style and

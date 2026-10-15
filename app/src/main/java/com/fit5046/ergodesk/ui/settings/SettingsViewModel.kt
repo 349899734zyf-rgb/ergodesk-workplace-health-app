@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.data.sensor.ForegroundTracker
 import com.fit5046.ergodesk.data.sensor.TrackingLog
 import com.fit5046.ergodesk.data.settings.SettingsRepository
@@ -67,6 +68,12 @@ class SettingsViewModel(
 
         // Background monitoring may have been switched.
         ForegroundTracker.update()
+
+        // With it off there are no background reminders, so
+        // drop one that was already scheduled.
+        if (!_draft.value.monitoringEnabled) {
+            BreakAlarmScheduler.cancelBreakReminder(getApplication(), automatic = true)
+        }
 
         Log.d(TAG, "Saved -> ${_draft.value}")
 
