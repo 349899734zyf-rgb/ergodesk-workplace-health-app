@@ -27,6 +27,7 @@ import android.util.Patterns
 //Firebase Authentication
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.UserProfileChangeRequest
+import com.google.firebase.firestore.FirebaseFirestore
 
 //Required Field Indicator Styling
 import androidx.compose.ui.graphics.Color
@@ -65,6 +66,7 @@ fun SignUpScreen(
 
     val context = LocalContext.current
     val auth = remember {FirebaseAuth.getInstance()}
+    val firestore = remember {FirebaseFirestore.getInstance()}
 
     if (showDatePicker) {
         DatePickerDialog(
@@ -247,42 +249,70 @@ fun SignUpScreen(
             //Sign Up Button
             Button(
                 onClick = {
-                    when {fullName.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank() || dateOfBirth.isBlank() || selectedDiscomfort.isBlank() -> {
-                        errorMessage = "Please fill out all details!"
-                    }
-                        !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> {errorMessage = "Please enter a valid email address!"}
+                    when {
+                        fullName.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank() || dateOfBirth.isBlank() || selectedDiscomfort.isBlank() -> {
+                            errorMessage = "Please fill out all details!"
+                        }
 
-                        password.length < 8 -> {errorMessage = "Password must be at least 8 characters long!"}
-                        password != confirmPassword -> {errorMessage = "Passwords do not match!"}
+                        !Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches() -> {
+                            errorMessage = "Please enter a valid email address!"
+                        }
+
+                        password.length < 8 -> {
+                            errorMessage = "Password must be at least 8 characters long!"
+                        }
+
+                        password != confirmPassword -> {
+                            errorMessage = "Passwords do not match!"
+                        }
 
                         else -> {
                             isLoading = true
                             errorMessage = ""
 
-                            auth.createUserWithEmailAndPassword(email.trim(), password).addOnCompleteListener {task ->
-                                if (task.isSuccessful) {
-                                    val user = auth.currentUser
-                                    val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(fullName.trim()).build()
-                                    if (user != null) {
-                                        user.updateProfile(profileUpdates).addOnCompleteListener {
+                            auth.createUserWithEmailAndPassword(email.trim(), password)
+                                .addOnCompleteListener {task ->
+                                    if (task.isSuccessful) {
+                                        val user = task.result?.user
+                                        if (user != null) {
+                                            val profileUpdates = UserProfileChangeRequest.Builder().setDisplayName(fullName.trim()).build()
+
+                                            val userDetails = hashMapOf("fullName" to fullName.trim(), "email" to email.trim(), "dateOfBirth" to dateOfBirth, "primaryDiscomfort" to selectedDiscomfort)
+
+                                            //Save the user's extra details to ErgoDesk's collection
+                                            firestore.collection("ergodesk_users")
+                                                .document(user.uid)
+                                                .set(userDetails)
+                                                .addOnSuccessListener {
+                                                    //Keep the existing Firebase display name
+                                                    user.updateProfile(profileUpdates)
+                                                        .addOnCompleteListener { profileTask ->
+                                                            isLoading = false
+
+                                                            if (profileTask.isSuccessful) {
+                                                                Toast.makeText(context, "Registration Successful!", Toast.LENGTH_SHORT).show()
+                                                                onSignUpSuccess()
+                                                            } else {
+                                                                errorMessage = "Details Saved! But display name update failed: " + (profileTask.exception?.localizedMessage ?: "Unknown Error")
+                                                            }
+                                                        }
+                                                }
+                                                .addOnFailureListener { exception ->
+                                                    isLoading = false
+                                                    errorMessage = "Account Created! but details could not be saved: " + (exception.localizedMessage ?: "Unknown Error")
+                                                }
+                                        } else {
                                             isLoading = false
-                                            Toast.makeText(context, "Registration Successful!", Toast.LENGTH_SHORT).show()
-                                            onSignUpSuccess()
+                                            errorMessage = "Account Created! But user information is unavailable!"
                                         }
                                     } else {
                                         isLoading = false
-                                        errorMessage = "Account Created! Please log in to continue!"
+                                        errorMessage = task.exception?.localizedMessage ?: "Registration Failed! Please try again!"
                                     }
-
-
-                                } else {
-                                    isLoading = false
-                                    errorMessage = task.exception?.localizedMessage ?: "Registration Failed! Please try again!"
                                 }
                             }
                         }
-                    }
-                },
+                    },
                 enabled = !isLoading,
                 modifier = Modifier.fillMaxWidth().height(50.dp)
             ) {Text("Sign Up")}
