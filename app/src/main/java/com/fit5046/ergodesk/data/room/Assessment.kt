@@ -7,6 +7,7 @@ import androidx.room.PrimaryKey
 data class Assessment(
     @PrimaryKey(autoGenerate = true)
     val uid: Int = 0,
+    val userId: String = "",
     val date: String,
     val jobType: String,
     val startTime: String,
