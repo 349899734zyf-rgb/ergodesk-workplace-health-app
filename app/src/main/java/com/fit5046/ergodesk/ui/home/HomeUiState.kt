@@ -37,6 +37,8 @@ data class HomeUiState(
     val breakIntervalMinutes: Int = ContextEngine.BASE_INTERVAL_MINUTES,
     val holdReason: HoldReason? = null,
     val dayOffReason: String? = null,
+    // End of quiet hours, e.g. "07:00", while they are on.
+    val quietUntil: String? = null,
     val suggestion: BreakSuggestion = BreakSuggestion.DESK_STRETCH,
     // From Settings: keep sensing when the app is closed.
     val backgroundMonitoring: Boolean = true,
@@ -83,6 +85,7 @@ data class HomeUiState(
     val postureLabel: String
         get() = when {
             posture == null -> "Reading sensors…"
+            quietUntil != null -> "Quiet hours"
             onBreak && breakIsLogged -> "Taking a break"
             posture == PostureState.SITTING -> "Sitting"
             posture == PostureState.STANDING -> "Standing"
@@ -93,6 +96,8 @@ data class HomeUiState(
         get() = when {
             posture == null -> ""
 
+            quietUntil != null -> "Quiet hours: tracking and reminders paused until $quietUntil"
+
             onBreak && breakMinutes >= RECOMMENDED_BREAK_MINUTES ->
                 "Great break! Sit down whenever you're ready"
 
@@ -100,7 +105,6 @@ data class HomeUiState(
 
             holdReason == HoldReason.MEETING -> "Reminders paused during your meeting"
             holdReason == HoldReason.DAY_OFF -> "No reminders today: $dayOffReason"
-            holdReason == HoldReason.QUIET_HOURS -> "Reminders paused for quiet hours"
             minutesUntilBreak <= 0 -> "Break due now"
             minutesUntilBreak == 1 -> "Next break in 1 minute"
             else -> "Next break in $minutesUntilBreak minutes"
@@ -205,6 +209,12 @@ data class HomeUiState(
                 breakIntervalMinutes = decision.intervalMinutes,
                 holdReason = decision.holdReason,
                 dayOffReason = dayOffReason,
+                quietUntil =
+                    if (decision.holdReason == HoldReason.QUIET_HOURS) {
+                        UserSettings.formatMinuteOfDay(settings.quietEndMinute)
+                    } else {
+                        null
+                    },
                 suggestion = decision.suggestion,
                 backgroundMonitoring = settings.monitoringEnabled,
                 breakActivity = settings.breakActivity,

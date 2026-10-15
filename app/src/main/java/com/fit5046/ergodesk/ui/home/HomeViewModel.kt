@@ -117,14 +117,15 @@ class HomeViewModel(
      * sit" and the timeline. Rebuilt every few seconds from
      * the sensor samples for today's tracked intervals, and at
      * once when the user logs a break or changes movement
-     * sensitivity.
+     * sensitivity or quiet hours. Quiet hours are never
+     * tracked.
      */
     val todaySessions: StateFlow<List<ActivitySession>> =
         combine(
             manualBreaks,
-            settings.map { it.minBreakSeconds }.distinctUntilChanged()
-        ) { breaks, minBreakSeconds -> breaks to minBreakSeconds }
-            .flatMapLatest { (breaks, minBreakSeconds) ->
+            settings.map { it.minBreakSeconds to it.quietHours }.distinctUntilChanged()
+        ) { breaks, (minBreakSeconds, quietHours) -> Triple(breaks, minBreakSeconds, quietHours) }
+            .flatMapLatest { (breaks, minBreakSeconds, quietHours) ->
                 flow {
                     val simulator =
                         SensorDataSimulator.fromAssets(getApplication())
@@ -136,12 +137,15 @@ class HomeViewModel(
                             } else {
                                 ActivitySessions.forIntervals(
                                     simulator = simulator,
-                                    intervals = TrackingLog.intervals(
-                                        context = getApplication(),
-                                        userId = user.uid,
-                                        trackingStartMillis = user.trackingStartMillis,
-                                        fromMillis = today.startMillis,
-                                        toMillis = System.currentTimeMillis()
+                                    intervals = TrackingLog.withoutQuietHours(
+                                        TrackingLog.intervals(
+                                            context = getApplication(),
+                                            userId = user.uid,
+                                            trackingStartMillis = user.trackingStartMillis,
+                                            fromMillis = today.startMillis,
+                                            toMillis = System.currentTimeMillis()
+                                        ),
+                                        quietHours
                                     ),
                                     manualBreaks = breaks,
                                     minBreakSeconds = minBreakSeconds
@@ -177,7 +181,7 @@ class HomeViewModel(
 
             HomeUiState.from(
                 posture = posture,
-                sessions = ActivitySessions.summarize(sessions),
+                sessions = ActivitySessions.summarize(sessions, System.currentTimeMillis()),
                 today = todayRecord,
                 history = history,
                 minuteOfDay = ContextEngine.minuteOfDay(System.currentTimeMillis()),

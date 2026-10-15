@@ -177,7 +177,7 @@ fun SettingsScreen(
                 onClick = { showQuietEndPicker = true }
             )
             Text(
-                "Reminders are muted during these hours (e.g. overnight, lunch or a focus block).",
+                "Tracking and reminders pause during these hours, e.g. overnight while you sleep.",
                 style = MaterialTheme.typography.bodySmall,
                 color = ErgoMutedText,
                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)

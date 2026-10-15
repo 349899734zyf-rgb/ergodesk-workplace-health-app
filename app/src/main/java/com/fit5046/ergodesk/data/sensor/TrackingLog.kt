@@ -1,6 +1,9 @@
 package com.fit5046.ergodesk.data.sensor
 
 import android.content.Context
+import com.fit5046.ergodesk.data.context.QuietHours
+import java.time.Instant
+import java.time.ZoneId
 
 /*
  * When sensing was on for each account, as [start, end)
@@ -43,6 +46,61 @@ object TrackingLog {
                 val end = minOf(interval.end ?: toMillis, toMillis)
                 if (start < end) start until end else null
             }
+    }
+
+    /*
+     * The same intervals with quiet hours cut out. Quiet
+     * hours are usually overnight, when the phone lies still
+     * on a desk or bedside table and would read as sitting,
+     * so nothing in them counts as sitting or as a break.
+     */
+    fun withoutQuietHours(
+        intervals: List<LongRange>,
+        quietHours: QuietHours,
+        zone: ZoneId = ZoneId.systemDefault()
+    ): List<LongRange> {
+
+        if (intervals.isEmpty() || quietHours.startMinute == quietHours.endMinute) {
+            return intervals
+        }
+
+        val firstDay =
+            Instant.ofEpochMilli(intervals.first().first).atZone(zone).toLocalDate().minusDays(1)
+
+        val lastDay =
+            Instant.ofEpochMilli(intervals.last().last).atZone(zone).toLocalDate()
+
+        // Every quiet window that could touch the intervals;
+        // one that wraps past midnight ends the next day.
+        val quietWindows =
+            generateSequence(firstDay) { it.plusDays(1) }
+                .takeWhile { !it.isAfter(lastDay) }
+                .map { day ->
+                    val dayStart = day.atStartOfDay(zone).toInstant().toEpochMilli()
+                    val start = dayStart + quietHours.startMinute * 60_000L
+                    val end =
+                        if (quietHours.startMinute < quietHours.endMinute) {
+                            dayStart + quietHours.endMinute * 60_000L
+                        } else {
+                            day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() +
+                                    quietHours.endMinute * 60_000L
+                        }
+                    start until end
+                }
+                .toList()
+
+        return intervals.flatMap { interval ->
+            quietWindows.fold(listOf(interval)) { pieces, quiet ->
+                pieces.flatMap { piece ->
+                    listOfNotNull(
+                        (piece.first until minOf(piece.last + 1, quiet.first))
+                            .takeIf { !it.isEmpty() },
+                        (maxOf(piece.first, quiet.last + 1)..piece.last)
+                            .takeIf { !it.isEmpty() }
+                    )
+                }
+            }
+        }
     }
 
     /*

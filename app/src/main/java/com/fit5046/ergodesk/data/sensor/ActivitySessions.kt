@@ -300,8 +300,17 @@ object ActivitySessions {
 
     private const val HOUR_MILLIS = 60 * 60 * 1000L
 
+    // Sessions end on the last whole-second sample.
+    private const val STILL_RUNNING_MILLIS = 5_000L
+
+    /*
+     * nowMillis: a last session that ended before now (say,
+     * at the start of quiet hours) is not running any more,
+     * so there is no current session.
+     */
     fun summarize(
-        sessions: List<ActivitySession>
+        sessions: List<ActivitySession>,
+        nowMillis: Long? = null
     ): SessionSummary {
 
         val sitting =
@@ -309,7 +318,9 @@ object ActivitySessions {
 
         // The session running now: sitting, or some kind of break.
         val current =
-            sessions.lastOrNull()
+            sessions.lastOrNull()?.takeIf {
+                nowMillis == null || it.endMillis >= nowMillis - STILL_RUNNING_MILLIS
+            }
 
         val currentSitting =
             current?.takeIf { it.type == SessionType.SITTING }

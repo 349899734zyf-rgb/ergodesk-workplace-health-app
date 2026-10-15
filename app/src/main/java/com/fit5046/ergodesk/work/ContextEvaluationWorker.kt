@@ -67,19 +67,22 @@ class ContextEvaluationWorker(
         val sessions =
             ActivitySessions.forIntervals(
                 simulator = SensorDataSimulator.fromAssets(applicationContext),
-                intervals = TrackingLog.intervals(
-                    context = applicationContext,
-                    userId = user.uid,
-                    trackingStartMillis = user.trackingStartMillis,
-                    fromMillis = now - ActivitySessions.LOOKBACK_MILLIS,
-                    toMillis = now
+                intervals = TrackingLog.withoutQuietHours(
+                    TrackingLog.intervals(
+                        context = applicationContext,
+                        userId = user.uid,
+                        trackingStartMillis = user.trackingStartMillis,
+                        fromMillis = now - ActivitySessions.LOOKBACK_MILLIS,
+                        toMillis = now
+                    ),
+                    settings.quietHours
                 ),
                 manualBreaks = ManualBreakStore.read(applicationContext, user.uid),
                 minBreakSeconds = settings.minBreakSeconds
             )
 
         val sittingBoutMinutes =
-            (ActivitySessions.summarize(sessions).currentSittingSeconds / 60L).toInt()
+            (ActivitySessions.summarize(sessions, now).currentSittingSeconds / 60L).toInt()
 
         val window =
             ContextEngine.complianceWindow(now)

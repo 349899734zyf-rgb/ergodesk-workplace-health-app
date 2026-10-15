@@ -63,12 +63,15 @@ class SensorIngestWorker(
         val sessions =
             ActivitySessions.forIntervals(
                 simulator = SensorDataSimulator.fromAssets(applicationContext),
-                intervals = TrackingLog.intervals(
-                    context = applicationContext,
-                    userId = user.uid,
-                    trackingStartMillis = user.trackingStartMillis,
-                    fromMillis = today.startMillis,
-                    toMillis = now
+                intervals = TrackingLog.withoutQuietHours(
+                    TrackingLog.intervals(
+                        context = applicationContext,
+                        userId = user.uid,
+                        trackingStartMillis = user.trackingStartMillis,
+                        fromMillis = today.startMillis,
+                        toMillis = now
+                    ),
+                    settings.quietHours
                 ),
                 manualBreaks = ManualBreakStore.read(applicationContext, user.uid),
                 minBreakSeconds = settings.minBreakSeconds
