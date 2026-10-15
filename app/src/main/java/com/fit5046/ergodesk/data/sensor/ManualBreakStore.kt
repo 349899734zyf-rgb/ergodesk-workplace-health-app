@@ -7,19 +7,21 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 /*
- * When each account last pressed "Take a break now".
+ * When each account pressed "Take a break now", oldest
+ * first. Only the last two days are kept.
  *
- * Kept in SharedPreferences so ContextEvaluationWorker
- * sees it even after a process restart, and exposed as a
- * Flow so Home restarts its sitting timer at once.
+ * Kept in SharedPreferences so the workers see it even
+ * after a process restart, and exposed as a Flow so Home
+ * splits the current sitting session at once.
  */
 object ManualBreakStore {
 
-    private const val PREFS_NAME = "manual_break"
-    private const val KEY_PREFIX = "last_break_millis_"
+    private const val PREFS_NAME = "manual_breaks"
+    private const val KEY_PREFIX = "breaks_"
+    private const val KEEP_MILLIS = 2 * 24 * 60 * 60 * 1000L
 
-    private val lastBreaks =
-        MutableStateFlow<Map<String, Long>>(emptyMap())
+    private val breaksByUser =
+        MutableStateFlow<Map<String, List<Long>>>(emptyMap())
 
     @Volatile
     private var loaded = false
@@ -27,27 +29,44 @@ object ManualBreakStore {
     fun observe(
         context: Context,
         userId: String
-    ): Flow<Long?> {
+    ): Flow<List<Long>> {
         load(context)
-        return lastBreaks.map { it[userId] }.distinctUntilChanged()
+        return breaksByUser.map { it[userId].orEmpty() }.distinctUntilChanged()
     }
 
     fun read(
         context: Context,
         userId: String
-    ): Long? {
+    ): List<Long> {
         load(context)
-        return lastBreaks.value[userId]
+        return breaksByUser.value[userId].orEmpty()
     }
 
+    fun last(
+        context: Context,
+        userId: String
+    ): Long? {
+        return read(context, userId).lastOrNull()
+    }
+
+    @Synchronized
     fun record(
         context: Context,
         userId: String,
         timeMillis: Long
     ) {
         load(context)
-        prefs(context).edit().putLong(KEY_PREFIX + userId, timeMillis).apply()
-        lastBreaks.value = lastBreaks.value + (userId to timeMillis)
+
+        val updated =
+            (read(context, userId) + timeMillis)
+                .filter { it > timeMillis - KEEP_MILLIS }
+                .sorted()
+
+        prefs(context).edit()
+            .putStringSet(KEY_PREFIX + userId, updated.map { it.toString() }.toSet())
+            .apply()
+
+        breaksByUser.value = breaksByUser.value + (userId to updated)
     }
 
     private fun load(
@@ -58,11 +77,14 @@ object ManualBreakStore {
         }
         synchronized(this) {
             if (!loaded) {
-                lastBreaks.value =
+                breaksByUser.value =
                     prefs(context).all
                         .filterKeys { it.startsWith(KEY_PREFIX) }
                         .mapNotNull { (key, value) ->
-                            (value as? Long)?.let { key.removePrefix(KEY_PREFIX) to it }
+                            (value as? Set<*>)?.let { times ->
+                                key.removePrefix(KEY_PREFIX) to
+                                        times.mapNotNull { (it as? String)?.toLongOrNull() }.sorted()
+                            }
                         }
                         .toMap()
                 loaded = true

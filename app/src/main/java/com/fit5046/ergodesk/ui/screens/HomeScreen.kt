@@ -15,6 +15,7 @@ package com.fit5046.ergodesk.ui.screens
  */
 
 import android.widget.Toast
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -44,10 +45,10 @@ import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.network.model.WeatherAdvice
 import com.fit5046.ergodesk.data.sensor.ActivitySession
-import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.PostureState
 import com.fit5046.ergodesk.data.sensor.SessionType
 import com.fit5046.ergodesk.ui.home.HomeUiState
+import com.fit5046.ergodesk.ui.home.RingMode
 import com.fit5046.ergodesk.ui.home.HomeViewModel
 import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
@@ -55,6 +56,13 @@ import com.fit5046.ergodesk.ui.viewmodel.WeatherViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+/* Ring colours: green while sitting, amber when a break is due, blue on a break. */
+
+private val DueAmber = Color(0xFFB86E00)
+private val DueAmberSoft = Color(0xFFFFF3E0)
+private val BreakBlue = Color(0xFF2F6FA3)
+private val BreakBlueSoft = Color(0xFFEAF2FA)
 
 /* One row of the "Recent activity" timeline. */
 
@@ -81,18 +89,19 @@ private fun timelineEvents(
         val inProgress =
             index == sessions.lastIndex
 
-        val isBreak =
-            session.type == SessionType.BREAK
-
         val end =
             if (inProgress) "now" else clock.format(Date(session.endMillis))
 
         TimelineEvent(
             time = "${clock.format(Date(session.startMillis))} – $end",
-            title = if (isBreak) "Break" else "Sitting",
+            title = when (session.type) {
+                SessionType.SITTING -> "Sitting"
+                SessionType.BREAK -> "Break"
+                SessionType.LOGGED_BREAK -> "Break logged"
+            },
             detail = AnalyticsCalculator.formatMinutes(session.minutes) +
                     if (inProgress) " · in progress" else "",
-            isBreak = isBreak
+            isBreak = session.type != SessionType.SITTING
         )
     }.asReversed()
 }
@@ -193,13 +202,31 @@ private fun HomeContent(
                 }
             }
 
-            /* Sitting progress ring */
+            /* Sitting / break ring */
             item {
+
+                val ringColor by animateColorAsState(
+                    targetValue = when (state.ringMode) {
+                        RingMode.SITTING -> ErgoGreen
+                        RingMode.BREAK_DUE -> DueAmber
+                        RingMode.ON_BREAK -> BreakBlue
+                    },
+                    label = "ringColor"
+                )
+
+                val cardColor by animateColorAsState(
+                    targetValue = when (state.ringMode) {
+                        RingMode.SITTING -> ErgoSoftGreen
+                        RingMode.BREAK_DUE -> DueAmberSoft
+                        RingMode.ON_BREAK -> BreakBlueSoft
+                    },
+                    label = "ringCardColor"
+                )
 
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    color = ErgoSoftGreen
+                    color = cardColor
                 ) {
 
                     Column(
@@ -215,11 +242,11 @@ private fun HomeContent(
 
                             CircularProgressIndicator(
                                 progress = {
-                                    state.sittingProgress
+                                    state.ringProgress
                                 },
                                 modifier = Modifier.size(168.dp),
                                 strokeWidth = 12.dp,
-                                color = ErgoGreen,
+                                color = ringColor,
                                 trackColor = Color.White
                             )
 
@@ -229,14 +256,14 @@ private fun HomeContent(
                             ) {
 
                                 Text(
-                                    "${state.sittingBoutMinutes}",
+                                    "${state.ringMinutes}",
                                     fontSize = 46.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = ErgoGreen
+                                    color = ringColor
                                 )
 
                                 Text(
-                                    "minutes sitting",
+                                    state.ringLabel,
                                     style =
                                         MaterialTheme.typography.bodyMedium,
                                     color = ErgoMutedText
@@ -262,8 +289,23 @@ private fun HomeContent(
                             state.statusText,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            color = ErgoGreen
+                            color = ringColor,
+                            textAlign = TextAlign.Center
                         )
+
+                        state.monitoringNote?.let { note ->
+
+                            Spacer(
+                                Modifier.height(8.dp)
+                            )
+
+                            Text(
+                                note,
+                                fontSize = 12.sp,
+                                color = ErgoMutedText,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
@@ -354,7 +396,7 @@ private fun HomeContent(
 
                     StatCard(
                         AnalyticsCalculator.formatMinutes(
-                            ActivitySessions.longestSittingMinutes(sessions)
+                            state.longestSitMinutes
                         ),
                         "Longest sit",
                         Modifier.weight(1f)

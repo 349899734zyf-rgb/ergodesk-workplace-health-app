@@ -11,7 +11,7 @@ enum class PostureState {
  * features the classifier needs.
  *
  * trueLabel is the ground truth from the MotionSense
- * dataset. Only tests read it; the app must classify.
+ * dataset, kept for checking accuracy; the app classifies.
  */
 data class MotionSample(
     val pitch: Float,
@@ -19,15 +19,9 @@ data class MotionSample(
     val trueLabel: PostureState
 )
 
-data class PostureSummary(
-    val sittingSeconds: Int,
-    val standingSeconds: Int,
-    val movingSeconds: Int
-)
-
 /*
  * Rule-based posture classifier for a phone in the front
- * trouser pocket. Pure Kotlin so it runs in JVM tests.
+ * trouser pocket. Pure Kotlin, no Android dependencies.
  *
  * Thresholds come from the 1-second MotionSense windows
  * in motion_timeline.csv:
@@ -56,108 +50,5 @@ object PostureClassifier {
             else ->
                 PostureState.STANDING
         }
-    }
-
-    fun summarize(
-        samples: List<MotionSample>
-    ): PostureSummary {
-
-        val states =
-            samples.map { classify(it) }
-
-        return PostureSummary(
-            sittingSeconds = states.count { it == PostureState.SITTING },
-            standingSeconds = states.count { it == PostureState.STANDING },
-            movingSeconds = states.count { it == PostureState.MOVING }
-        )
-    }
-
-    /*
-     * Length of the sitting bout the samples end in, in
-     * seconds; 0 if the user is on a break. If the bout
-     * started before the first sample, the result is capped
-     * at the window length.
-     */
-    fun sittingBoutSeconds(
-        samples: List<MotionSample>,
-        minBreakSeconds: Int = SittingBoutTracker.DEFAULT_MIN_BREAK_SECONDS
-    ): Int {
-
-        val tracker =
-            SittingBoutTracker(minBreakSeconds)
-
-        return samples.fold(0) { _, sample -> tracker.add(sample) }
-    }
-}
-
-/*
- * Follows the current sitting bout one 1-second sample at
- * a time, so a live sensor stream can update it without
- * re-reading history.
- *
- * Only minBreakSeconds of continuous standing or moving
- * ends a bout, so shifting in the chair or standing up
- * for a few seconds does not reset the timer.
- */
-class SittingBoutTracker(
-    private val minBreakSeconds: Int = DEFAULT_MIN_BREAK_SECONDS
-) {
-
-    private var boutSeconds = 0
-    private var inBout = false
-    private var nonSittingRun = 0
-
-    /*
-     * Returns the bout length in seconds after this sample.
-     */
-    fun add(
-        sample: MotionSample
-    ): Int {
-
-        if (PostureClassifier.classify(sample) == PostureState.SITTING) {
-            inBout = true
-            nonSittingRun = 0
-        } else {
-            nonSittingRun++
-            if (nonSittingRun >= minBreakSeconds) {
-                inBout = false
-            }
-        }
-
-        boutSeconds =
-            if (inBout) boutSeconds + 1 else 0
-
-        return boutSeconds
-    }
-
-    companion object {
-
-        const val DEFAULT_MIN_BREAK_SECONDS = 60
-
-        /*
-         * A bout can't have started before sinceMillis: the
-         * user's last "Take a break now" (they took a break
-         * even if the sensor missed it) or the moment they
-         * were first signed in on this device.
-         */
-        fun capSince(
-            sensorBoutSeconds: Int,
-            nowMillis: Long,
-            sinceMillis: Long?
-        ): Int {
-
-            if (sinceMillis == null) {
-                return sensorBoutSeconds
-            }
-
-            val secondsSince =
-                ((nowMillis - sinceMillis) / 1000L).coerceAtLeast(0L)
-
-            return minOf(sensorBoutSeconds.toLong(), secondsSince).toInt()
-        }
-
-        // Long enough to see the start of a bout that runs
-        // well past the relaxed 45-minute interval.
-        const val LOOKBACK_MILLIS = 2 * 60 * 60 * 1000L
     }
 }

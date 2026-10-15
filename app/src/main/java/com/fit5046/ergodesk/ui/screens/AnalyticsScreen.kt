@@ -997,8 +997,8 @@ private fun InsightCard(
 
 /*
  * Line chart of daily break completion. The dashed lines
- * are ContextEngine's thresholds: below 40% reminders relax
- * to 45 minutes, above 80% they tighten to 25 minutes.
+ * are ContextEngine's thresholds: below 40% the reminder
+ * interval relaxes, above 80% it tightens (smart mode).
  */
 @Composable
 private fun BreakTrendChart(
@@ -1033,14 +1033,12 @@ private fun BreakTrendChart(
         Triple(
             ContextEngine.LOW_COMPLIANCE * 100f,
             RelaxedThreshold,
-            "Below ${(ContextEngine.LOW_COMPLIANCE * 100).toInt()}% → " +
-                    "${ContextEngine.RELAXED_INTERVAL_MINUTES}-min reminders"
+            "Below ${(ContextEngine.LOW_COMPLIANCE * 100).toInt()}% → longer intervals"
         ),
         Triple(
             ContextEngine.HIGH_COMPLIANCE * 100f,
             ActiveGreen,
-            "Above ${(ContextEngine.HIGH_COMPLIANCE * 100).toInt()}% → " +
-                    "${ContextEngine.TIGHT_INTERVAL_MINUTES}-min reminders"
+            "Above ${(ContextEngine.HIGH_COMPLIANCE * 100).toInt()}% → shorter intervals"
         )
     )
 

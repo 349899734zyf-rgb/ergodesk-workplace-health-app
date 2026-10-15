@@ -8,6 +8,7 @@ import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.context.ContextEngine
+import com.fit5046.ergodesk.data.context.WeatherCache
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.ActivityIngest
 import com.fit5046.ergodesk.data.sensor.ActivitySession
@@ -15,31 +16,32 @@ import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.PostureState
+import com.fit5046.ergodesk.data.sensor.ForegroundTracker
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
-import com.fit5046.ergodesk.data.sensor.SittingBoutTracker
+import com.fit5046.ergodesk.data.sensor.TrackingLog
+import com.fit5046.ergodesk.data.settings.SettingsRepository
+import com.fit5046.ergodesk.data.settings.UserSettings
 import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Calendar
 
-private data class LiveSensing(
-    val posture: PostureState,
-    val sittingBoutSeconds: Int
-)
-
+@OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
     application: Application
 ) : AndroidViewModel(application) {
@@ -62,39 +64,95 @@ class HomeViewModel(
     private val complianceWindow =
         ContextEngine.complianceWindow(startMillis)
 
-    /*
-     * Replays recent history into the tracker first, so the
-     * bout is right immediately, then follows the live
-     * feed. Restarts from scratch on every new collection.
-     */
-    private val liveSensing =
+    // Filled by WeatherSyncWorker; picks the break suggestion.
+    private val weatherCache =
+        WeatherCache(application)
+
+    private val manualBreaks: Flow<List<Long>> =
+        user
+            ?.let { ManualBreakStore.observe(application, it.uid) }
+            ?: flowOf(emptyList())
+
+    init {
+        // Home is open, so sensing is on; this also starts it
+        // right after sign-in.
+        ForegroundTracker.update()
+    }
+
+    // Saved Settings; a change shows up on Home at once.
+    private val settings: Flow<UserSettings> =
+        user
+            ?.let { SettingsRepository.observe(application, it.uid) }
+            ?: flowOf(UserSettings())
+
+    // "Now: Sitting / Standing / Moving", from the live feed.
+    private val livePosture: Flow<PostureState> =
         flow {
             val simulator =
                 SensorDataSimulator.fromAssets(getApplication())
 
-            val now =
-                System.currentTimeMillis()
-
-            val tracker =
-                SittingBoutTracker()
-
-            simulator
-                .samplesBetween(now - SittingBoutTracker.LOOKBACK_MILLIS, now)
-                .forEach { tracker.add(it) }
-
             emitAll(
-                simulator.liveSamples(now).map { sample ->
-                    LiveSensing(
-                        posture = PostureClassifier.classify(sample),
-                        sittingBoutSeconds = tracker.add(sample)
-                    )
-                }
+                simulator
+                    .liveSamples(System.currentTimeMillis())
+                    .map { PostureClassifier.classify(it) }
             )
-        }.flowOn(Dispatchers.Default)
+        }
+            .distinctUntilChanged()
+            .flowOn(Dispatchers.Default)
+
+    /*
+     * Today's sitting and break sessions, oldest first: the
+     * single source for the ring, "Sitting today", "Longest
+     * sit" and the timeline. Rebuilt every few seconds from
+     * the sensor samples for today's tracked intervals, and at
+     * once when the user logs a break or changes movement
+     * sensitivity.
+     */
+    val todaySessions: StateFlow<List<ActivitySession>> =
+        combine(
+            manualBreaks,
+            settings.map { it.minBreakSeconds }.distinctUntilChanged()
+        ) { breaks, minBreakSeconds -> breaks to minBreakSeconds }
+            .flatMapLatest { (breaks, minBreakSeconds) ->
+                flow {
+                    val simulator =
+                        SensorDataSimulator.fromAssets(getApplication())
+
+                    while (true) {
+                        emit(
+                            if (user == null) {
+                                emptyList()
+                            } else {
+                                ActivitySessions.forIntervals(
+                                    simulator = simulator,
+                                    intervals = TrackingLog.intervals(
+                                        context = getApplication(),
+                                        userId = user.uid,
+                                        trackingStartMillis = user.trackingStartMillis,
+                                        fromMillis = today.startMillis,
+                                        toMillis = System.currentTimeMillis()
+                                    ),
+                                    manualBreaks = breaks,
+                                    minBreakSeconds = minBreakSeconds
+                                )
+                            }
+                        )
+
+                        delay(SESSIONS_REFRESH_MILLIS)
+                    }
+                }
+            }
+            .flowOn(Dispatchers.Default)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
 
     val uiState: StateFlow<HomeUiState> =
         combine(
-            liveSensing,
+            livePosture,
+            todaySessions,
             repository
                 .observeRecordsBetween(today.startMillis, today.endMillis)
                 .map { it.firstOrNull() },
@@ -103,101 +161,37 @@ class HomeViewModel(
                     complianceWindow.startMillis,
                     complianceWindow.endMillis
                 ),
-            user
-                ?.let { ManualBreakStore.observe(application, it.uid) }
-                ?: flowOf(null)
-        ) { live, todayRecord, history, lastBreak ->
-
-            // A bout ends at the user's own "Take a break now"
-            // and never starts before they were first signed in here.
-            val boutSince =
-                listOfNotNull(lastBreak, user?.trackingStartMillis).maxOrNull()
+            settings
+        ) { posture, sessions, todayRecord, history, userSettings ->
 
             HomeUiState.from(
-                posture = live.posture,
-                // Without a signed-in account nothing is tracked.
-                sittingBoutSeconds =
-                    if (user == null) {
-                        0
-                    } else {
-                        SittingBoutTracker.capSince(
-                            live.sittingBoutSeconds,
-                            System.currentTimeMillis(),
-                            boutSince
-                        )
-                    },
+                posture = posture,
+                sessions = ActivitySessions.summarize(sessions),
                 today = todayRecord,
                 history = history,
-                hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+                minuteOfDay = ContextEngine.minuteOfDay(System.currentTimeMillis()),
+                weather = weatherCache.read(),
+                settings = userSettings
             )
         }
-            // The sensor ticks every second, but the state only
-            // changes when a minute passes or data changes.
+            // Sessions refresh every few seconds, but the state
+            // only changes when a minute passes or data changes.
             .distinctUntilChanged()
             .onEach { Log.d(STATE_TAG, it.logSummary) }
             .stateIn(
                 scope = viewModelScope,
-                // Stops the 1-second feed shortly after Home
+                // Stops the sensor feed shortly after Home
                 // leaves the screen, keeping it across rotation.
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = HomeUiState()
             )
 
     /*
-     * Today's sitting and break sessions, oldest first, for
-     * the timeline and "Longest sit". Rebuilt once a minute
-     * from the sensor samples since midnight, or since the
-     * account was first signed in here if that was later.
-     */
-    val todaySessions: StateFlow<List<ActivitySession>> =
-        flow {
-            val simulator =
-                SensorDataSimulator.fromAssets(getApplication())
-
-            while (true) {
-                val now =
-                    System.currentTimeMillis()
-
-                // Samples fall on whole seconds.
-                val firstSecondMillis =
-                    Math.floorDiv(
-                        maxOf(today.startMillis, user?.trackingStartMillis ?: 0L) + 999L,
-                        1000L
-                    ) * 1000L
-
-                emit(
-                    if (user == null || firstSecondMillis >= now) {
-                        emptyList()
-                    } else {
-                        ActivitySessions.fromSamples(
-                            samples = simulator.samplesBetween(firstSecondMillis, now),
-                            firstSampleMillis = firstSecondMillis
-                        )
-                    }
-                )
-
-                delay(SESSIONS_REFRESH_MILLIS)
-            }
-        }
-            .flowOn(Dispatchers.Default)
-            .onEach { sessions ->
-                Log.d(
-                    STATE_TAG,
-                    "Timeline: ${sessions.size} sessions today, " +
-                            "longest sit ${ActivitySessions.longestSittingMinutes(sessions)} min"
-                )
-            }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = emptyList()
-            )
-
-    /*
-     * "Take a break now": restarts the sitting timer, counts
-     * a completed break for today and clears the pending
-     * automatic reminder, since the user is already on a
-     * break. A manual snooze is kept.
+     * "Take a break now": the next 5 minutes count as a break
+     * (Home turns blue), counts a completed break for today
+     * and clears the
+     * pending automatic reminder, since the user is already
+     * on a break. A manual snooze is kept.
      *
      * Returns false, and counts nothing, when the last break
      * was under BREAK_COOLDOWN_MILLIS ago, so repeated taps
@@ -212,7 +206,7 @@ class HomeViewModel(
             System.currentTimeMillis()
 
         val lastBreak =
-            ManualBreakStore.read(getApplication(), account.uid)
+            ManualBreakStore.last(getApplication(), account.uid)
 
         if (lastBreak != null && now - lastBreak < BREAK_COOLDOWN_MILLIS) {
             Log.d(STATE_TAG, "Break ignored -> last one was under 5 min ago")
@@ -238,7 +232,7 @@ class HomeViewModel(
 
             Log.d(
                 STATE_TAG,
-                "Break taken -> sitting timer restarted, " +
+                "Break taken -> 5-min break started, " +
                         "${updated.breaksCompleted}/${updated.breakTarget} breaks today, " +
                         "automatic reminder cleared"
             )
@@ -249,7 +243,9 @@ class HomeViewModel(
 
     private companion object {
         const val STATE_TAG = "HomeState"
-        const val SESSIONS_REFRESH_MILLIS = 60_000L
-        const val BREAK_COOLDOWN_MILLIS = 5 * 60 * 1000L
+        const val SESSIONS_REFRESH_MILLIS = 10_000L
+        // Same length as a logged break, so a second tap
+        // can only come once the first break is over.
+        const val BREAK_COOLDOWN_MILLIS = ActivitySessions.LOGGED_BREAK_MILLIS
     }
 }
