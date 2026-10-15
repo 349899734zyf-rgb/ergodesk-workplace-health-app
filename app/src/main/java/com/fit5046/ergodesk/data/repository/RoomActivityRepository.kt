@@ -5,7 +5,6 @@ import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.local.ActivityRecordDao
 import com.fit5046.ergodesk.data.model.ActivityRecord
 import com.fit5046.ergodesk.data.model.ActivityRecordEntity
-import com.fit5046.ergodesk.data.user.CurrentUser
 import com.fit5046.ergodesk.data.user.TrackedUser
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -26,7 +25,7 @@ import java.util.Calendar
  */
 class RoomActivityRepository(
     private val dao: ActivityRecordDao,
-    private val currentUser: () -> TrackedUser? = CurrentUser::get
+    private val currentUser: () -> TrackedUser?
 ) : ActivityRepository {
 
     private val seedLock = Mutex()

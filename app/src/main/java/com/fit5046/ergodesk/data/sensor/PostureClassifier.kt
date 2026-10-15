@@ -137,8 +137,8 @@ class SittingBoutTracker(
         /*
          * A bout can't have started before sinceMillis: the
          * user's last "Take a break now" (they took a break
-         * even if the sensor missed it) or the moment their
-         * account was created (nothing before that is theirs).
+         * even if the sensor missed it) or the moment they
+         * were first signed in on this device.
          */
         fun capSince(
             sensorBoutSeconds: Int,

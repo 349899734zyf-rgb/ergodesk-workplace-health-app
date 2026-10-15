@@ -52,7 +52,7 @@ class HomeViewModel(
 
     // Home is only reachable after login, but stay safe.
     private val user =
-        CurrentUser.get()
+        CurrentUser.get(application)
 
     // Fixed when Home opens; a screen left open past
     // midnight keeps showing the previous day.
@@ -109,18 +109,23 @@ class HomeViewModel(
         ) { live, todayRecord, history, lastBreak ->
 
             // A bout ends at the user's own "Take a break now"
-            // and never starts before their account existed.
+            // and never starts before they were first signed in here.
             val boutSince =
                 listOfNotNull(lastBreak, user?.trackingStartMillis).maxOrNull()
 
             HomeUiState.from(
                 posture = live.posture,
+                // Without a signed-in account nothing is tracked.
                 sittingBoutSeconds =
-                    SittingBoutTracker.capSince(
-                        live.sittingBoutSeconds,
-                        System.currentTimeMillis(),
-                        boutSince
-                    ),
+                    if (user == null) {
+                        0
+                    } else {
+                        SittingBoutTracker.capSince(
+                            live.sittingBoutSeconds,
+                            System.currentTimeMillis(),
+                            boutSince
+                        )
+                    },
                 today = todayRecord,
                 history = history,
                 hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -142,7 +147,7 @@ class HomeViewModel(
      * Today's sitting and break sessions, oldest first, for
      * the timeline and "Longest sit". Rebuilt once a minute
      * from the sensor samples since midnight, or since the
-     * account was created if that was later today.
+     * account was first signed in here if that was later.
      */
     val todaySessions: StateFlow<List<ActivitySession>> =
         flow {

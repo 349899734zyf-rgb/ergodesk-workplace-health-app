@@ -36,14 +36,14 @@ class SensorIngestWorker(
             System.currentTimeMillis()
 
         val user =
-            CurrentUser.get()
+            CurrentUser.get(applicationContext)
 
         if (user == null) {
             Log.d(TAG, "No one signed in -> skipped")
             return Result.success()
         }
 
-        // A new account only counts time since it was created.
+        // Only time since the account was first signed in here counts.
         val windowStart =
             maxOf(now - WINDOW_MILLIS, user.trackingStartMillis)
 

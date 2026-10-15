@@ -2,6 +2,7 @@ package com.fit5046.ergodesk.data.repository
 
 import android.content.Context
 import com.fit5046.ergodesk.data.local.ErgoDeskDatabase
+import com.fit5046.ergodesk.data.user.CurrentUser
 
 /*
  * Single place that decides which repository
@@ -20,7 +21,8 @@ object RepositoryProvider {
 
         return instance ?: synchronized(this) {
             instance ?: RoomActivityRepository(
-                ErgoDeskDatabase.getDatabase(context).activityRecordDao()
+                dao = ErgoDeskDatabase.getDatabase(context).activityRecordDao(),
+                currentUser = { CurrentUser.get(context.applicationContext) }
             ).also { instance = it }
         }
     }

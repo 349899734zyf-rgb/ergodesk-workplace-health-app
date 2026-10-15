@@ -40,7 +40,7 @@ class ContextEvaluationWorker(
             System.currentTimeMillis()
 
         val user =
-            CurrentUser.get()
+            CurrentUser.get(applicationContext)
 
         if (user == null) {
             BreakAlarmScheduler.cancelBreakReminder(applicationContext, automatic = true)
@@ -53,7 +53,7 @@ class ContextEvaluationWorker(
                 .samplesBetween(now - SittingBoutTracker.LOOKBACK_MILLIS, now)
 
         // A bout ends at the user's own "Take a break now" and
-        // never starts before their account existed.
+        // never starts before they were first signed in here.
         val boutSince =
             listOfNotNull(
                 ManualBreakStore.read(applicationContext, user.uid),
