@@ -15,6 +15,7 @@ import com.fit5046.ergodesk.ui.screens.SignUpScreen
 import com.fit5046.ergodesk.ui.screens.StretchDetailScreen
 import com.fit5046.ergodesk.ui.screens.StretchListScreen
 
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun AppNavHost(
@@ -75,21 +76,13 @@ fun AppNavHost(
         }
 
 
-        composable(
-            Screen.Settings.route
-        ) {
-
+        composable(Screen.Settings.route) {
             SettingsScreen(
-
                 onLogout = {
-
-                    navController.navigate(
-                        Screen.Login.route
-                    ) {
-
-                        popUpTo(0) {
-                            inclusive = true
-                        }
+                    FirebaseAuth.getInstance().signOut()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) {inclusive = true}
+                        launchSingleTop = true
                     }
                 }
             )

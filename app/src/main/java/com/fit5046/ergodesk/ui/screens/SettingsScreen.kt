@@ -51,6 +51,7 @@ import com.fit5046.ergodesk.data.settings.UserSettings
 import com.fit5046.ergodesk.ui.settings.SettingsViewModel
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
 import kotlin.math.roundToInt
+import com.google.firebase.auth.FirebaseAuth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +61,10 @@ fun SettingsScreen(
 ) {
 
     val context = LocalContext.current
+    val currentUser = FirebaseAuth.getInstance().currentUser
+    val userName = currentUser?.displayName?.takeIf { it.isNotBlank() }
+        ?: currentUser?.email
+        ?: "User"
 
     val settings by viewModel.draft.collectAsStateWithLifecycle()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsStateWithLifecycle()
@@ -108,12 +113,9 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    Text(viewModel.accountEmail, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Settings are saved for this account",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = ErgoMutedText
-                    )
+                    Text(userName, style = MaterialTheme.typography.titleMedium)
+                    Text(currentUser?.email ?: viewModel.accountEmail, style = MaterialTheme.typography.bodySmall, color = ErgoMutedText
+)
                 }
             }
 
