@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.fit5046.ergodesk.data.repository.RoomAssessmentRepository
 import com.fit5046.ergodesk.data.room.Assessment
 import com.fit5046.ergodesk.data.local.ErgoDeskDatabase
+import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -13,6 +14,7 @@ import kotlin.coroutines.cancellation.CancellationException
 
 class AssessmentViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val userId = CurrentUser.get(application)?.uid ?: ""
     private val repository: RoomAssessmentRepository
 
     val allAssessments: kotlinx.coroutines.flow.Flow<List<Assessment>>
@@ -20,18 +22,21 @@ class AssessmentViewModel(application: Application) : AndroidViewModel(applicati
 
     init {
         val dao = ErgoDeskDatabase.getDatabase(application).assessmentDAO()
-        repository = RoomAssessmentRepository(dao)
+        repository = RoomAssessmentRepository(dao, userId)
 
         allAssessments = repository.allAssessments
         activeAssessment = repository.activeAssessment
     }
+
+    private fun isCurrentUser(): Boolean =
+        userId.isNotBlank() && CurrentUser.get(getApplication())?.uid == userId
 
     fun insertAssessment(
         assessment: Assessment,
         onResult: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch {
-            val success = try {
+            val success = if (!isCurrentUser()) false else try {
                 withContext(Dispatchers.IO) {
                     repository.insertAssessment(assessment)
                 }
@@ -50,7 +55,7 @@ class AssessmentViewModel(application: Application) : AndroidViewModel(applicati
         onResult: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch {
-            val success = try {
+            val success = if (!isCurrentUser()) false else try {
                 withContext(Dispatchers.IO) {
                     repository.updateAssessment(assessment)
                 }
@@ -69,7 +74,7 @@ class AssessmentViewModel(application: Application) : AndroidViewModel(applicati
         onResult: (Boolean) -> Unit = {}
     ) {
         viewModelScope.launch {
-            val success = try {
+            val success = if (!isCurrentUser()) false else try {
                 withContext(Dispatchers.IO) {
                     repository.deleteAssessment(assessment)
                 }
