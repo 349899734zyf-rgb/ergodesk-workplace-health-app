@@ -11,7 +11,7 @@ import com.fit5046.ergodesk.data.room.AssessmentDAO
 
 @Database(
     entities = [StretchItemEntity::class, Assessment::class, ActivityRecordEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class ErgoDeskDatabase : RoomDatabase() {

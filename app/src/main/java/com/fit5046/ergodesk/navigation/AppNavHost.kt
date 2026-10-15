@@ -6,6 +6,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fit5046.ergodesk.ui.screens.AnalyticsScreen
 import com.fit5046.ergodesk.ui.screens.ErgoFormScreen
 import com.fit5046.ergodesk.ui.screens.HomeScreen
@@ -14,13 +15,17 @@ import com.fit5046.ergodesk.ui.screens.SettingsScreen
 import com.fit5046.ergodesk.ui.screens.SignUpScreen
 import com.fit5046.ergodesk.ui.screens.StretchDetailScreen
 import com.fit5046.ergodesk.ui.screens.StretchListScreen
+import com.fit5046.ergodesk.ui.viewmodel.WeatherViewModel
 
+import com.google.firebase.auth.FirebaseAuth
 
 @Composable
 fun AppNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier
 ) {
+    // Shared WeatherViewModel scoped to navigation host: prevents duplicate API calls across screens (Issue 9)
+    val sharedWeatherViewModel: WeatherViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -71,25 +76,17 @@ fun AppNavHost(
 
             // Screen.Dashboard is the "Home" tab. Settings is its own bottom-nav
             // tab now, so Home needs no in-screen navigation callback.
-            HomeScreen()
+            HomeScreen(weatherViewModel = sharedWeatherViewModel)
         }
 
 
-        composable(
-            Screen.Settings.route
-        ) {
-
+        composable(Screen.Settings.route) {
             SettingsScreen(
-
                 onLogout = {
-
-                    navController.navigate(
-                        Screen.Login.route
-                    ) {
-
-                        popUpTo(0) {
-                            inclusive = true
-                        }
+                    FirebaseAuth.getInstance().signOut()
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) {inclusive = true}
+                        launchSingleTop = true
                     }
                 }
             )
@@ -125,14 +122,13 @@ fun AppNavHost(
         ) {
 
             StretchListScreen(
-
                 onStretchClick = { stretchId ->
-
                     navController.navigate(
                         Screen.StretchDetail
                             .createRoute(stretchId)
                     )
-                }
+                },
+                weatherViewModel = sharedWeatherViewModel
             )
         }
 

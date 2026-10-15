@@ -1,4 +1,4 @@
-﻿plugins {
+plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
@@ -22,6 +22,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // WeatherAPI key for Member 4 external Retrofit web API integration
+        buildConfigField("String", "WEATHER_API_KEY", "\"54aec09c81644a1f99c12244261609\"")
     }
 
     buildTypes {
@@ -39,6 +42,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -93,7 +97,11 @@ dependencies {
     //Firebase Authentication
     implementation(platform("com.google.firebase:firebase-bom:34.4.0"))
     implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-firestore")
 
-    //Google Sign-In (legacy API used in this compact implementation)
+    //Google Sign-In
     implementation("com.google.android.gms:play-services-auth:21.5.1")
+
+    //Datastore Preference
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
 }
