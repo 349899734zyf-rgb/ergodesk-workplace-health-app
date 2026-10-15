@@ -1,8 +1,11 @@
 package com.fit5046.ergodesk.ui.screens
 
 /*
- * FIT5046 Assessment 2 — ErgoDesk
- * Member 2 — Settings screen (skeleton prototype, UI only).
+ * FIT5046 Assessment 4 — ErgoDesk
+ * Member 2 — Settings screen.
+ *
+ * Edits a draft in SettingsViewModel; "Save settings" stores it per account
+ * (SettingsRepository), and Home, ContextEngine and the workers follow it.
  *
  * Back navigation: onLogout comes from AppNavHost ("Sign out" -> Login).
  * The bottom NavigationBar is app-wide (ErgoDeskBottomNavBar).
@@ -23,6 +26,7 @@ package com.fit5046.ergodesk.ui.screens
  *       "12:30"), so the user never has to guess
  */
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -37,38 +41,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.fit5046.ergodesk.data.settings.UserSettings
+import com.fit5046.ergodesk.ui.settings.SettingsViewModel
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
-import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onLogout: () -> Unit) {
+fun SettingsScreen(
+    onLogout: () -> Unit,
+    viewModel: SettingsViewModel = viewModel()
+) {
 
-    // Prototype: local state only; A4 supplies this from a ViewModel + Room/DataStore.
-    var monitoringEnabled by remember { mutableStateOf(true) }
-    var smartMode by remember { mutableStateOf(true) }
-    var weatherAware by remember { mutableStateOf(true) }
-    var calendarAware by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
-    var breakInterval by remember { mutableFloatStateOf(30f) }         // 20–90 min
-    var movementSensitivity by remember { mutableFloatStateOf(3f) }    // 1–5
+    val settings by viewModel.draft.collectAsStateWithLifecycle()
+    val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsStateWithLifecycle()
 
-    var quietStart by remember { mutableStateOf("12:30") }
-    var quietEnd by remember { mutableStateOf("13:30") }
     var showQuietStartPicker by remember { mutableStateOf(false) }
     var showQuietEndPicker by remember { mutableStateOf(false) }
-
-    val reminderStyles = listOf("Notification", "Sound + notification", "Vibration only", "Silent banner")
-    var reminderStyle by remember { mutableStateOf(reminderStyles.first()) }
-
-    val breakActivities = listOf("Stretch", "Walk", "Eye rest")
-    var breakActivity by remember { mutableStateOf(breakActivities.first()) }
 
     Column(
         modifier = Modifier
@@ -100,7 +97,7 @@ fun SettingsScreen(onLogout: () -> Unit) {
                 Text("Settings", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
 
-            /* User card — read-only; the profile is maintained in the ErgoForm assessment. */
+            /* Account card — settings are saved for this account. */
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
@@ -111,17 +108,11 @@ fun SettingsScreen(onLogout: () -> Unit) {
                         .fillMaxWidth()
                         .padding(16.dp)
                 ) {
-                    Text("Sherry Fang", style = MaterialTheme.typography.titleMedium)
+                    Text(viewModel.accountEmail, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Office worker · 8 h screen time / day",
+                        "Settings are saved for this account",
                         style = MaterialTheme.typography.bodySmall,
                         color = ErgoMutedText
-                    )
-                    Text(
-                        "From your ergonomic assessment",
-                        fontSize = 11.sp,
-                        color = ErgoMutedText,
-                        modifier = Modifier.padding(top = 6.dp)
                     )
                 }
             }
@@ -131,35 +122,41 @@ fun SettingsScreen(onLogout: () -> Unit) {
 
             SettingSwitchRow(
                 title = "Enable sitting monitoring",
-                subtitle = "Track sitting time in the background",
-                checked = monitoringEnabled,
-                onCheckedChange = { monitoringEnabled = it }
+                subtitle = "Keep tracking and reminding when ErgoDesk is closed. Off: only while the app is open",
+                checked = settings.monitoringEnabled,
+                onCheckedChange = { checked -> viewModel.update { it.copy(monitoringEnabled = checked) } }
             )
             SettingSwitchRow(
                 title = "Smart context-aware mode",
                 subtitle = "Automatically adjust the break interval from your recent break history",
-                checked = smartMode,
-                onCheckedChange = { smartMode = it }
+                checked = settings.smartMode,
+                onCheckedChange = { checked -> viewModel.update { it.copy(smartMode = checked) } }
             )
 
             // G2 + G3: a Slider instead of a text field; current value shown top-right.
             SettingSliderRow(
                 title = "Break interval",
-                valueLabel = "${breakInterval.roundToInt()} min",
-                value = breakInterval,
-                onValueChange = { breakInterval = it },
+                valueLabel = "${settings.breakIntervalMinutes} min",
+                value = settings.breakIntervalMinutes.toFloat(),
+                onValueChange = { value -> viewModel.update { it.copy(breakIntervalMinutes = value.roundToInt()) } },
                 valueRange = 20f..90f,
                 steps = 13,
                 endLabels = "20 min" to "90 min"
             )
             SettingSliderRow(
                 title = "Movement sensitivity",
-                valueLabel = "Level ${movementSensitivity.roundToInt()}",
-                value = movementSensitivity,
-                onValueChange = { movementSensitivity = it },
+                valueLabel = "Level ${settings.movementSensitivity}",
+                value = settings.movementSensitivity.toFloat(),
+                onValueChange = { value -> viewModel.update { it.copy(movementSensitivity = value.roundToInt()) } },
                 valueRange = 1f..5f,
                 steps = 3,
                 endLabels = "Relaxed" to "Sensitive"
+            )
+            Text(
+                "A break counts after ${settings.minBreakSeconds} s of standing or moving.",
+                style = MaterialTheme.typography.bodySmall,
+                color = ErgoMutedText,
+                modifier = Modifier.padding(top = 4.dp)
             )
 
             /* G1 — section 2: Schedule */
@@ -169,16 +166,16 @@ fun SettingsScreen(onLogout: () -> Unit) {
             // input errors are impossible.
             TimeFieldRow(
                 label = "Quiet hours start",
-                value = quietStart,
+                value = UserSettings.formatMinuteOfDay(settings.quietStartMinute),
                 onClick = { showQuietStartPicker = true }
             )
             TimeFieldRow(
                 label = "Quiet hours end",
-                value = quietEnd,
+                value = UserSettings.formatMinuteOfDay(settings.quietEndMinute),
                 onClick = { showQuietEndPicker = true }
             )
             Text(
-                "Reminders are muted during these hours (e.g. lunch or a focus block).",
+                "Reminders are muted during these hours (e.g. overnight, lunch or a focus block).",
                 style = MaterialTheme.typography.bodySmall,
                 color = ErgoMutedText,
                 modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)
@@ -190,15 +187,15 @@ fun SettingsScreen(onLogout: () -> Unit) {
             // Basic component: Expanded (Exposed) Dropdown Menu.
             DropdownField(
                 label = "Reminder style",
-                options = reminderStyles,
-                selected = reminderStyle,
-                onSelected = { reminderStyle = it }
+                options = UserSettings.REMINDER_STYLES,
+                selected = settings.reminderStyle,
+                onSelected = { style -> viewModel.update { it.copy(reminderStyle = style) } }
             )
             DropdownField(
                 label = "Break activity preference",
-                options = breakActivities,
-                selected = breakActivity,
-                onSelected = { breakActivity = it }
+                options = UserSettings.BREAK_ACTIVITIES,
+                selected = settings.breakActivity,
+                onSelected = { activity -> viewModel.update { it.copy(breakActivity = activity) } }
             )
 
             /* G1 — section 4: Context sources */
@@ -207,29 +204,47 @@ fun SettingsScreen(onLogout: () -> Unit) {
             SettingSwitchRow(
                 title = "Weather-based suggestions",
                 subtitle = "Suggest an outdoor walk when conditions are suitable",
-                checked = weatherAware,
-                onCheckedChange = { weatherAware = it }
+                checked = settings.weatherAware,
+                onCheckedChange = { checked -> viewModel.update { it.copy(weatherAware = checked) } }
             )
             SettingSwitchRow(
                 title = "Calendar awareness",
-                subtitle = "Hold reminders while you are in a meeting",
-                checked = calendarAware,
-                onCheckedChange = { calendarAware = it }
+                subtitle = "No reminders on weekends and Victorian public holidays",
+                checked = settings.calendarAware,
+                onCheckedChange = { checked -> viewModel.update { it.copy(calendarAware = checked) } }
             )
 
             Spacer(Modifier.height(20.dp))
 
             Button(
-                onClick = { /* A4: persist to Room / DataStore */ },
+                onClick = {
+                    val saved = viewModel.save()
+                    Toast.makeText(
+                        context,
+                        if (saved) "Settings saved. Home now follows them." else "Sign in to save settings",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
+                enabled = hasUnsavedChanges,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
-            ) { Text("Save settings") }
+            ) { Text(if (hasUnsavedChanges) "Save settings" else "Saved") }
+
+            if (hasUnsavedChanges) {
+                TextButton(
+                    onClick = { viewModel.discardChanges() },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Discard changes") }
+            }
 
             Spacer(Modifier.height(8.dp))
 
             OutlinedButton(
-                onClick = onLogout,
+                onClick = {
+                    viewModel.signOut()
+                    onLogout()
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),
@@ -244,10 +259,10 @@ fun SettingsScreen(onLogout: () -> Unit) {
     if (showQuietStartPicker) {
         TimePickerDialogM3(
             title = "Quiet hours start",
-            initial = quietStart,
+            initial = UserSettings.formatMinuteOfDay(settings.quietStartMinute),
             onDismiss = { showQuietStartPicker = false },
             onConfirm = { h, m ->
-                quietStart = String.format(Locale.getDefault(), "%02d:%02d", h, m)
+                viewModel.update { it.copy(quietStartMinute = h * 60 + m) }
                 showQuietStartPicker = false
             }
         )
@@ -255,10 +270,10 @@ fun SettingsScreen(onLogout: () -> Unit) {
     if (showQuietEndPicker) {
         TimePickerDialogM3(
             title = "Quiet hours end",
-            initial = quietEnd,
+            initial = UserSettings.formatMinuteOfDay(settings.quietEndMinute),
             onDismiss = { showQuietEndPicker = false },
             onConfirm = { h, m ->
-                quietEnd = String.format(Locale.getDefault(), "%02d:%02d", h, m)
+                viewModel.update { it.copy(quietEndMinute = h * 60 + m) }
                 showQuietEndPicker = false
             }
         )
@@ -470,10 +485,4 @@ private fun TimePickerDialogM3(
             }
         }
     }
-}
-
-@Preview(showBackground = true, widthDp = 393, heightDp = 851)
-@Composable
-private fun SettingsScreenPreview() {
-    ErgoDeskTheme { SettingsScreen(onLogout = {}) }
 }

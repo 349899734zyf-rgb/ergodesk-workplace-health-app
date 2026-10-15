@@ -18,6 +18,7 @@ enum class BreakSuggestion {
 
 enum class HoldReason {
     MEETING,
+    DAY_OFF,
     QUIET_HOURS
 }
 
@@ -33,21 +34,35 @@ data class WeatherSnapshot(
 )
 
 /*
- * Hours in 24-hour time. startHour > endHour wraps past
- * midnight, e.g. 22 to 7.
+ * Minutes after midnight. startMinute > endMinute wraps
+ * past midnight, e.g. 22:00 to 07:00.
  */
 data class QuietHours(
-    val startHour: Int,
-    val endHour: Int
+    val startMinute: Int,
+    val endMinute: Int
 )
 
+/*
+ * Everything ContextEngine decides from: the sensed sitting
+ * bout, break history, time of day, weather and the user's
+ * own settings.
+ */
 data class ContextInput(
     val sittingBoutMinutes: Int,
     // Share of planned breaks taken recently, 0..1;
     // null when there is no history yet.
     val complianceRate: Float?,
-    val hourOfDay: Int,
+    val minuteOfDay: Int,
+    // From Settings: the user's interval and whether ErgoDesk
+    // may adapt it to their break history.
+    val baseIntervalMinutes: Int = ContextEngine.BASE_INTERVAL_MINUTES,
+    val smartMode: Boolean = true,
     val inMeeting: Boolean = false,
+    // "Weekend" or a public holiday's name when Calendar
+    // awareness is on and today is a day off; else null.
+    val dayOffReason: String? = null,
+    // Null when there is no fresh weather or the user turned
+    // weather-based suggestions off.
     val weather: WeatherSnapshot? = null,
     val quietHours: QuietHours = ContextEngine.DEFAULT_QUIET_HOURS
 )
@@ -66,23 +81,24 @@ data class ContextDecision(
 
 /*
  * Fuses activity and non-sensory context into a break
- * decision (A2 report, section 1.4). Pure Kotlin so every
- * rule is covered by JVM tests; ContextEvaluationWorker
+ * decision (A2 report, section 1.4), personalised by the
+ * user's Settings. Pure Kotlin; ContextEvaluationWorker
  * gathers the inputs and schedules the alarm.
  */
 object ContextEngine {
 
+    // Default break interval; users can change it in Settings.
     const val BASE_INTERVAL_MINUTES = 30
-    const val RELAXED_INTERVAL_MINUTES = 45
-    const val TIGHT_INTERVAL_MINUTES = 25
+
+    // Never tighten below this, whatever the base interval.
+    private const val MIN_INTERVAL_MINUTES = 15
 
     const val LOW_COMPLIANCE = 0.4f
     const val HIGH_COMPLIANCE = 0.8f
 
     const val COMPLIANCE_DAYS = 7
 
-    // TODO(merge with Settings): read the user's quiet hours.
-    val DEFAULT_QUIET_HOURS = QuietHours(startHour = 22, endHour = 7)
+    val DEFAULT_QUIET_HOURS = QuietHours(startMinute = 22 * 60, endMinute = 7 * 60)
 
     // Outdoor walks are only suggested in daylight working
     // hours, and only when the weather suits one.
@@ -93,16 +109,20 @@ object ContextEngine {
         input: ContextInput
     ): ContextDecision {
 
+        // With smart mode off the user's interval is used as is.
+        val compliance =
+            input.complianceRate.takeIf { input.smartMode }
+
         val interval =
-            breakInterval(input.complianceRate)
+            breakInterval(input.baseIntervalMinutes, compliance)
 
         return ContextDecision(
             intervalMinutes = interval,
             minutesUntilDue = interval - input.sittingBoutMinutes,
             holdReason = holdReason(input),
-            style = reminderStyle(input.complianceRate),
+            style = reminderStyle(compliance),
             suggestion =
-                if (isWalkWeather(input.weather, input.hourOfDay)) {
+                if (isWalkWeather(input.weather, input.minuteOfDay / 60)) {
                     BreakSuggestion.OUTDOOR_WALK
                 } else {
                     BreakSuggestion.DESK_STRETCH
@@ -112,18 +132,22 @@ object ContextEngine {
 
     /*
      * Users who skip most breaks get fewer, quieter
-     * reminders instead of being nagged; users who keep
-     * up get a tighter interval.
+     * reminders instead of being nagged (+50%); users who
+     * keep up get a tighter interval (-5 min). With the
+     * default 30 minutes that is 45 and 25, as in the A2
+     * report.
      */
     fun breakInterval(
+        baseIntervalMinutes: Int,
         complianceRate: Float?
     ): Int {
 
         return when {
-            complianceRate == null -> BASE_INTERVAL_MINUTES
-            complianceRate < LOW_COMPLIANCE -> RELAXED_INTERVAL_MINUTES
-            complianceRate > HIGH_COMPLIANCE -> TIGHT_INTERVAL_MINUTES
-            else -> BASE_INTERVAL_MINUTES
+            complianceRate == null -> baseIntervalMinutes
+            complianceRate < LOW_COMPLIANCE -> baseIntervalMinutes + baseIntervalMinutes / 2
+            complianceRate > HIGH_COMPLIANCE ->
+                (baseIntervalMinutes - 5).coerceAtLeast(MIN_INTERVAL_MINUTES)
+            else -> baseIntervalMinutes
         }
     }
 
@@ -144,21 +168,35 @@ object ContextEngine {
 
         return when {
             input.inMeeting -> HoldReason.MEETING
-            isQuietHour(input.hourOfDay, input.quietHours) -> HoldReason.QUIET_HOURS
+            input.dayOffReason != null -> HoldReason.DAY_OFF
+            isQuietTime(input.minuteOfDay, input.quietHours) -> HoldReason.QUIET_HOURS
             else -> null
         }
     }
 
-    fun isQuietHour(
-        hourOfDay: Int,
+    fun isQuietTime(
+        minuteOfDay: Int,
         quietHours: QuietHours
     ): Boolean {
 
-        return if (quietHours.startHour <= quietHours.endHour) {
-            hourOfDay >= quietHours.startHour && hourOfDay < quietHours.endHour
+        return if (quietHours.startMinute <= quietHours.endMinute) {
+            minuteOfDay >= quietHours.startMinute && minuteOfDay < quietHours.endMinute
         } else {
-            hourOfDay >= quietHours.startHour || hourOfDay < quietHours.endHour
+            minuteOfDay >= quietHours.startMinute || minuteOfDay < quietHours.endMinute
         }
+    }
+
+    /*
+     * Minutes after midnight, local time.
+     */
+    fun minuteOfDay(
+        timeMillis: Long
+    ): Int {
+
+        val calendar =
+            Calendar.getInstance().apply { this.timeInMillis = timeMillis }
+
+        return calendar.get(Calendar.HOUR_OF_DAY) * 60 + calendar.get(Calendar.MINUTE)
     }
 
     fun isWalkWeather(

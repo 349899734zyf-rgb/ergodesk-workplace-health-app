@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.fit5046.ergodesk.data.sensor.ForegroundTracker
 import com.fit5046.ergodesk.navigation.AppNavHost
 import com.fit5046.ergodesk.navigation.ErgoDeskBottomNavBar
 import com.fit5046.ergodesk.navigation.bottomNavItems
@@ -40,6 +41,8 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.POST_NOTIFICATIONS
             )
         }
+
+        ForegroundTracker.install(this)
 
         SensorIngestWorker.schedule(this)
         ContextEvaluationWorker.schedule(this)
