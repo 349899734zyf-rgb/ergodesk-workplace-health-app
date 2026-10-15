@@ -36,6 +36,15 @@ data class ChartData(
 )
 
 /*
+ * One day on the break completion trend: breaks taken as a
+ * percentage of the day's target, 0..100.
+ */
+data class TrendPoint(
+    val label: String,
+    val percent: Float
+)
+
+/*
  * Pure calculation helpers for Home and Analytics.
  *
  * Nothing here depends on Compose or Android, so every
@@ -238,6 +247,40 @@ object AnalyticsCalculator {
                 )
             }
         }
+    }
+
+    /* ---------------- Break trend ---------------- */
+
+    /*
+     * Daily break completion for the line chart, oldest
+     * first. Weekly views label points by weekday, monthly
+     * views by day of the month.
+     */
+    fun buildBreakTrend(
+        period: AnalyticsPeriod,
+        records: List<ActivityRecord>
+    ): List<TrendPoint> {
+
+        return records
+            .sortedBy { it.timestamp }
+            .map { record ->
+                TrendPoint(
+                    label =
+                        if (period == AnalyticsPeriod.MONTHLY) {
+                            SimpleDateFormat("d", Locale.ENGLISH)
+                                .format(Date(record.timestamp))
+                        } else {
+                            weekdayLabel(record.timestamp)
+                        },
+                    percent =
+                        if (record.breakTarget > 0) {
+                            (record.breaksCompleted * 100f / record.breakTarget)
+                                .coerceIn(0f, 100f)
+                        } else {
+                            0f
+                        }
+                )
+            }
     }
 
     /* ---------------- Text formatting ---------------- */
