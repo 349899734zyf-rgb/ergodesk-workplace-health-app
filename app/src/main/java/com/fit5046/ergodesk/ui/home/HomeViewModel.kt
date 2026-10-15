@@ -10,12 +10,15 @@ import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.ActivityIngest
+import com.fit5046.ergodesk.data.sensor.ActivitySession
+import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.PostureState
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
 import com.fit5046.ergodesk.data.sensor.SittingBoutTracker
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -123,6 +126,44 @@ class HomeViewModel(
             )
 
     /*
+     * Today's sitting and break sessions, oldest first, for
+     * the timeline and "Longest sit". Rebuilt from the
+     * sensor samples since midnight once a minute.
+     */
+    val todaySessions: StateFlow<List<ActivitySession>> =
+        flow {
+            val simulator =
+                SensorDataSimulator.fromAssets(getApplication())
+
+            while (true) {
+                val now =
+                    System.currentTimeMillis()
+
+                emit(
+                    ActivitySessions.fromSamples(
+                        samples = simulator.samplesBetween(today.startMillis, now),
+                        firstSampleMillis = today.startMillis
+                    )
+                )
+
+                delay(SESSIONS_REFRESH_MILLIS)
+            }
+        }
+            .flowOn(Dispatchers.Default)
+            .onEach { sessions ->
+                Log.d(
+                    STATE_TAG,
+                    "Timeline: ${sessions.size} sessions today, " +
+                            "longest sit ${ActivitySessions.longestSittingMinutes(sessions)} min"
+                )
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000),
+                initialValue = emptyList()
+            )
+
+    /*
      * "Take a break now": restarts the sitting timer, counts
      * a completed break for today and clears the pending
      * automatic reminder, since the user is already on a
@@ -158,5 +199,6 @@ class HomeViewModel(
 
     private companion object {
         const val STATE_TAG = "HomeState"
+        const val SESSIONS_REFRESH_MILLIS = 60_000L
     }
 }
