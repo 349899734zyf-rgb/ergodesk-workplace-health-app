@@ -9,12 +9,13 @@ package com.fit5046.ergodesk.ui.screens
  * The bottom NavigationBar is app-wide (ErgoDeskBottomNavBar).
  * Route object is Screen.Dashboard ("dashboard"); the team label is "Home".
  *
- * A4: live posture, sitting bout, break interval and today's totals come
- * from HomeViewModel; the weather card comes from WeatherViewModel (Member 4).
- * The timeline is still a sample until ActivitySession data exists.
+ * A4: live posture, sitting bout, break interval, today's totals and the
+ * activity timeline come from HomeViewModel; the weather card comes from
+ * WeatherViewModel (Member 4).
  */
 
 import android.widget.Toast
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -42,14 +43,20 @@ import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.network.model.WeatherAdvice
+import com.fit5046.ergodesk.data.sensor.ActivitySession
+import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.PostureState
+import com.fit5046.ergodesk.data.sensor.SessionType
 import com.fit5046.ergodesk.ui.home.HomeUiState
 import com.fit5046.ergodesk.ui.home.HomeViewModel
 import com.fit5046.ergodesk.ui.theme.ErgoDeskTheme
 import com.fit5046.ergodesk.ui.theme.ErgoGreen
 import com.fit5046.ergodesk.ui.viewmodel.WeatherViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-/* Sample timeline — replaced once Room stores ActivitySession rows. */
+/* One row of the "Recent activity" timeline. */
 
 data class TimelineEvent(
     val time: String,
@@ -58,38 +65,37 @@ data class TimelineEvent(
     val isBreak: Boolean
 )
 
-private val sampleTimeline = listOf(
-    TimelineEvent(
-        "09:02 – 09:48",
-        "Sitting",
-        "46 min · desk",
-        false
-    ),
-    TimelineEvent(
-        "09:48 – 09:54",
-        "Break taken",
-        "Outdoor walk · 6 min",
-        true
-    ),
-    TimelineEvent(
-        "09:54 – 10:41",
-        "Sitting",
-        "47 min · desk",
-        false
-    ),
-    TimelineEvent(
-        "10:41 – 10:47",
-        "Break taken",
-        "Desk stretch · 6 min",
-        true
-    ),
-    TimelineEvent(
-        "10:47 – 11:29",
-        "Sitting",
-        "42 min · in progress",
-        false
-    )
-)
+/*
+ * Newest first. The last session of the day is the one
+ * still running, so it ends "now".
+ */
+private fun timelineEvents(
+    sessions: List<ActivitySession>
+): List<TimelineEvent> {
+
+    val clock =
+        SimpleDateFormat("HH:mm", Locale.ENGLISH)
+
+    return sessions.mapIndexed { index, session ->
+
+        val inProgress =
+            index == sessions.lastIndex
+
+        val isBreak =
+            session.type == SessionType.BREAK
+
+        val end =
+            if (inProgress) "now" else clock.format(Date(session.endMillis))
+
+        TimelineEvent(
+            time = "${clock.format(Date(session.startMillis))} – $end",
+            title = if (isBreak) "Break" else "Sitting",
+            detail = AnalyticsCalculator.formatMinutes(session.minutes) +
+                    if (inProgress) " · in progress" else "",
+            isBreak = isBreak
+        )
+    }.asReversed()
+}
 
 @Composable
 fun HomeScreen(
@@ -99,17 +105,33 @@ fun HomeScreen(
 
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val weatherAdvice by weatherViewModel.weatherAdvice.collectAsStateWithLifecycle()
+    val sessions by viewModel.todaySessions.collectAsStateWithLifecycle()
 
-    HomeContent(state, weatherAdvice)
+    HomeContent(
+        state = state,
+        weatherAdvice = weatherAdvice,
+        sessions = sessions,
+        onTakeBreak = viewModel::takeBreakNow
+    )
 }
 
 @Composable
 private fun HomeContent(
     state: HomeUiState,
-    weatherAdvice: WeatherAdvice
+    weatherAdvice: WeatherAdvice,
+    sessions: List<ActivitySession>,
+    onTakeBreak: () -> Boolean
 ) {
 
     val context = LocalContext.current
+
+    val events = remember(sessions) {
+        timelineEvents(sessions)
+    }
+
+    var showAllEvents by rememberSaveable {
+        mutableStateOf(false)
+    }
 
     val todayLabel = remember {
         AnalyticsCalculator.formatPeriodLabel(
@@ -331,7 +353,9 @@ private fun HomeContent(
                     )
 
                     StatCard(
-                        "52m",
+                        AnalyticsCalculator.formatMinutes(
+                            ActivitySessions.longestSittingMinutes(sessions)
+                        ),
                         "Longest sit",
                         Modifier.weight(1f)
                     )
@@ -394,7 +418,18 @@ private fun HomeContent(
 
                     Button(
                         onClick = {
-                            /* A4: start break session */
+
+                            val logged = onTakeBreak()
+
+                            Toast.makeText(
+                                context,
+                                if (logged) {
+                                    "Break logged. Enjoy a short stretch!"
+                                } else {
+                                    "Break already logged in the last 5 minutes"
+                                },
+                                Toast.LENGTH_SHORT
+                            ).show()
                         },
                         modifier = Modifier
                             .weight(1f)
@@ -457,9 +492,22 @@ private fun HomeContent(
                 )
             }
 
-            /* Timeline: latest 3 rows */
+            /* Timeline: today's sessions from the sensor, newest first */
+            if (events.isEmpty()) {
+
+                item {
+
+                    Text(
+                        "No activity recorded yet today",
+                        style =
+                            MaterialTheme.typography.bodySmall,
+                        color = ErgoMutedText
+                    )
+                }
+            }
+
             items(
-                sampleTimeline.take(3)
+                if (showAllEvents) events else events.take(3)
             ) { event ->
 
                 TimelineRow(
@@ -467,19 +515,22 @@ private fun HomeContent(
                 )
             }
 
-            item {
+            if (events.size > 3) {
 
-                TextButton(
-                    onClick = {
-                        /* A4: open full activity history */
-                    },
-                    contentPadding =
-                        PaddingValues(0.dp)
-                ) {
+                item {
 
-                    Text(
-                        "View all"
-                    )
+                    TextButton(
+                        onClick = {
+                            showAllEvents = !showAllEvents
+                        },
+                        contentPadding =
+                            PaddingValues(0.dp)
+                    ) {
+
+                        Text(
+                            if (showAllEvents) "Show less" else "View all (${events.size})"
+                        )
+                    }
                 }
             }
         }
@@ -616,7 +667,13 @@ private fun HomeScreenPreview() {
                 headline = "Good time for an outdoor break",
                 subtitle = "21 °C, sunny, UV 3 · Ideal for a 5-min walk",
                 isOutdoorFriendly = true
-            )
+            ),
+            sessions = listOf(
+                ActivitySession(SessionType.SITTING, 32_400_000L, 35_160_000L),
+                ActivitySession(SessionType.BREAK, 35_160_000L, 35_520_000L),
+                ActivitySession(SessionType.SITTING, 35_520_000L, 38_340_000L)
+            ),
+            onTakeBreak = { true }
         )
     }
 }

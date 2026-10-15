@@ -9,9 +9,9 @@ import java.util.Calendar
 import kotlin.math.abs
 
 /*
- * In-memory ActivityRepository used until the Room
- * database is merged. Unit tests can pass their own
- * records through the constructor.
+ * In-memory ActivityRepository, kept for previews and
+ * experiments. Its prototype records also seed the
+ * history of RoomActivityRepository.
  */
 class FakeActivityRepository(
     initialRecords: List<ActivityRecord> =
