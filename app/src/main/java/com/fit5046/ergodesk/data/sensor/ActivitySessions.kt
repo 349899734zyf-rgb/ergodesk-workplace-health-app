@@ -57,7 +57,8 @@ data class SessionSummary(
  */
 object ActivitySessions {
 
-    // Standing or moving this long ends a sitting session.
+    // Standing or moving this long ends a sitting session
+    // (movement sensitivity level 3, the default).
     const val MIN_BREAK_SECONDS = 60
 
     // How long a "Take a break now" counts as a break.
@@ -82,7 +83,9 @@ object ActivitySessions {
         simulator: SensorDataSimulator,
         startMillis: Long,
         endMillis: Long,
-        manualBreaks: List<Long>
+        manualBreaks: List<Long>,
+        // From Settings: movement sensitivity.
+        minBreakSeconds: Int = MIN_BREAK_SECONDS
     ): List<ActivitySession> {
 
         // Samples fall on whole seconds.
@@ -96,13 +99,38 @@ object ActivitySessions {
         val sessions =
             fromSamples(
                 samples = simulator.samplesBetween(firstSecondMillis, endMillis),
-                firstSampleMillis = firstSecondMillis
+                firstSampleMillis = firstSecondMillis,
+                minRunSeconds = minBreakSeconds
             )
 
         return withManualBreaks(
             sessions,
             manualBreaks.filter { it in firstSecondMillis until endMillis }
         )
+    }
+
+    /*
+     * Sessions for each interval when sensing was on (see
+     * TrackingLog), in order. Gaps between intervals count as
+     * neither sitting nor a break, and sessions on either
+     * side of a gap are never joined.
+     */
+    fun forIntervals(
+        simulator: SensorDataSimulator,
+        intervals: List<LongRange>,
+        manualBreaks: List<Long>,
+        minBreakSeconds: Int = MIN_BREAK_SECONDS
+    ): List<ActivitySession> {
+
+        return intervals.flatMap { interval ->
+            forRange(
+                simulator = simulator,
+                startMillis = interval.first,
+                endMillis = interval.last + 1,
+                manualBreaks = manualBreaks,
+                minBreakSeconds = minBreakSeconds
+            )
+        }
     }
 
     /*

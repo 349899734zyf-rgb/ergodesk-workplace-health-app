@@ -16,7 +16,11 @@ import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.PostureState
+import com.fit5046.ergodesk.data.sensor.ForegroundTracker
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
+import com.fit5046.ergodesk.data.sensor.TrackingLog
+import com.fit5046.ergodesk.data.settings.SettingsRepository
+import com.fit5046.ergodesk.data.settings.UserSettings
 import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -36,7 +40,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Calendar
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModel(
@@ -70,6 +73,18 @@ class HomeViewModel(
             ?.let { ManualBreakStore.observe(application, it.uid) }
             ?: flowOf(emptyList())
 
+    init {
+        // Home is open, so sensing is on; this also starts it
+        // right after sign-in.
+        ForegroundTracker.update()
+    }
+
+    // Saved Settings; a change shows up on Home at once.
+    private val settings: Flow<UserSettings> =
+        user
+            ?.let { SettingsRepository.observe(application, it.uid) }
+            ?: flowOf(UserSettings())
+
     // "Now: Sitting / Standing / Moving", from the live feed.
     private val livePosture: Flow<PostureState> =
         flow {
@@ -89,13 +104,16 @@ class HomeViewModel(
      * Today's sitting and break sessions, oldest first: the
      * single source for the ring, "Sitting today", "Longest
      * sit" and the timeline. Rebuilt every few seconds from
-     * the sensor samples since midnight (or since the account
-     * was first signed in here), and at once when the user
-     * logs a break.
+     * the sensor samples for today's tracked intervals, and at
+     * once when the user logs a break or changes movement
+     * sensitivity.
      */
     val todaySessions: StateFlow<List<ActivitySession>> =
-        manualBreaks
-            .flatMapLatest { breaks ->
+        combine(
+            manualBreaks,
+            settings.map { it.minBreakSeconds }.distinctUntilChanged()
+        ) { breaks, minBreakSeconds -> breaks to minBreakSeconds }
+            .flatMapLatest { (breaks, minBreakSeconds) ->
                 flow {
                     val simulator =
                         SensorDataSimulator.fromAssets(getApplication())
@@ -105,11 +123,17 @@ class HomeViewModel(
                             if (user == null) {
                                 emptyList()
                             } else {
-                                ActivitySessions.forRange(
+                                ActivitySessions.forIntervals(
                                     simulator = simulator,
-                                    startMillis = maxOf(today.startMillis, user.trackingStartMillis),
-                                    endMillis = System.currentTimeMillis(),
-                                    manualBreaks = breaks
+                                    intervals = TrackingLog.intervals(
+                                        context = getApplication(),
+                                        userId = user.uid,
+                                        trackingStartMillis = user.trackingStartMillis,
+                                        fromMillis = today.startMillis,
+                                        toMillis = System.currentTimeMillis()
+                                    ),
+                                    manualBreaks = breaks,
+                                    minBreakSeconds = minBreakSeconds
                                 )
                             }
                         )
@@ -136,16 +160,18 @@ class HomeViewModel(
                 .observeRecordsBetween(
                     complianceWindow.startMillis,
                     complianceWindow.endMillis
-                )
-        ) { posture, sessions, todayRecord, history ->
+                ),
+            settings
+        ) { posture, sessions, todayRecord, history, userSettings ->
 
             HomeUiState.from(
                 posture = posture,
                 sessions = ActivitySessions.summarize(sessions),
                 today = todayRecord,
                 history = history,
-                hourOfDay = Calendar.getInstance().get(Calendar.HOUR_OF_DAY),
-                weather = weatherCache.read()
+                minuteOfDay = ContextEngine.minuteOfDay(System.currentTimeMillis()),
+                weather = weatherCache.read(),
+                settings = userSettings
             )
         }
             // Sessions refresh every few seconds, but the state

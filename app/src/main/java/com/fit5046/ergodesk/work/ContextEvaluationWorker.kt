@@ -10,14 +10,17 @@ import androidx.work.WorkerParameters
 import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.context.ContextInput
+import com.fit5046.ergodesk.data.context.DayOffCalendar
 import com.fit5046.ergodesk.data.context.WeatherCache
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
+import com.fit5046.ergodesk.data.sensor.TrackingLog
+import com.fit5046.ergodesk.data.settings.SettingsRepository
 import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
-import java.util.Calendar
+import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
 /*
@@ -47,15 +50,30 @@ class ContextEvaluationWorker(
             return Result.success()
         }
 
+        val settings =
+            SettingsRepository.read(applicationContext, user.uid)
+
+        if (!settings.monitoringEnabled) {
+            BreakAlarmScheduler.cancelBreakReminder(applicationContext, automatic = true)
+            Log.d(TAG, "Background monitoring is off in Settings -> no reminders, automatic reminder cleared")
+            return Result.success()
+        }
+
         // The same sessions Home shows: a bout ends when the
         // user stands up or presses "Take a break now", and
         // never starts before they were first signed in here.
         val sessions =
-            ActivitySessions.forRange(
+            ActivitySessions.forIntervals(
                 simulator = SensorDataSimulator.fromAssets(applicationContext),
-                startMillis = maxOf(now - ActivitySessions.LOOKBACK_MILLIS, user.trackingStartMillis),
-                endMillis = now,
-                manualBreaks = ManualBreakStore.read(applicationContext, user.uid)
+                intervals = TrackingLog.intervals(
+                    context = applicationContext,
+                    userId = user.uid,
+                    trackingStartMillis = user.trackingStartMillis,
+                    fromMillis = now - ActivitySessions.LOOKBACK_MILLIS,
+                    toMillis = now
+                ),
+                manualBreaks = ManualBreakStore.read(applicationContext, user.uid),
+                minBreakSeconds = settings.minBreakSeconds
             )
 
         val sittingBoutMinutes =
@@ -69,20 +87,28 @@ class ContextEvaluationWorker(
                 .observeRecordsBetween(window.startMillis, window.endMillis)
                 .first()
 
+        // Weather only counts if the user wants weather-based suggestions.
         val weather =
-            WeatherCache(applicationContext).read(now)
+            WeatherCache(applicationContext).read(now).takeIf { settings.weatherAware }
 
         val decision =
             ContextEngine.evaluate(
                 ContextInput(
                     sittingBoutMinutes = sittingBoutMinutes,
                     complianceRate = ContextEngine.complianceRate(history),
-                    hourOfDay = Calendar.getInstance().apply {
-                        timeInMillis = now
-                    }.get(Calendar.HOUR_OF_DAY),
+                    minuteOfDay = ContextEngine.minuteOfDay(now),
+                    baseIntervalMinutes = settings.breakIntervalMinutes,
+                    smartMode = settings.smartMode,
                     // TODO: calendar busy-state (needs READ_CALENDAR).
                     inMeeting = false,
-                    weather = weather
+                    dayOffReason =
+                        if (settings.calendarAware) {
+                            DayOffCalendar.dayOffReason(LocalDate.now())
+                        } else {
+                            null
+                        },
+                    weather = weather,
+                    quietHours = settings.quietHours
                 )
             )
 
@@ -103,7 +129,7 @@ class ContextEvaluationWorker(
             BreakAlarmScheduler.scheduleBreakReminder(
                 applicationContext,
                 delayMinutes,
-            automatic = true
+                automatic = true
             )
         } else {
             BreakAlarmScheduler.cancelBreakReminder(applicationContext, automatic = true)

@@ -3,6 +3,7 @@ package com.fit5046.ergodesk.ui.home
 import com.fit5046.ergodesk.data.context.BreakSuggestion
 import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.context.ContextInput
+import com.fit5046.ergodesk.data.context.DayOffCalendar
 import com.fit5046.ergodesk.data.context.HoldReason
 import com.fit5046.ergodesk.data.context.WeatherSnapshot
 import com.fit5046.ergodesk.data.model.ActivityRecord
@@ -10,6 +11,8 @@ import com.fit5046.ergodesk.data.sensor.ActivityIngest
 import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.PostureState
 import com.fit5046.ergodesk.data.sensor.SessionSummary
+import com.fit5046.ergodesk.data.settings.UserSettings
+import java.time.LocalDate
 
 /*
  * What the ring on Home is showing; each mode has its own
@@ -33,7 +36,11 @@ data class HomeUiState(
     val breakIsLogged: Boolean = false,
     val breakIntervalMinutes: Int = ContextEngine.BASE_INTERVAL_MINUTES,
     val holdReason: HoldReason? = null,
+    val dayOffReason: String? = null,
     val suggestion: BreakSuggestion = BreakSuggestion.DESK_STRETCH,
+    // From Settings: keep sensing when the app is closed.
+    val backgroundMonitoring: Boolean = true,
+    val breakActivity: String = UserSettings.ACTIVITY_STRETCH,
     val sittingTodayMinutes: Int = 0,
     val longestSitMinutes: Int = 0,
     val breaksCompleted: Int = 0,
@@ -89,16 +96,47 @@ data class HomeUiState(
             onBreak && breakMinutes >= RECOMMENDED_BREAK_MINUTES ->
                 "Great break! Sit down whenever you're ready"
 
-            onBreak && suggestion == BreakSuggestion.OUTDOOR_WALK ->
-                "Good time for a short walk outside"
-
-            onBreak -> "Try a quick desk stretch"
+            onBreak -> breakIdea
 
             holdReason == HoldReason.MEETING -> "Reminders paused during your meeting"
+            holdReason == HoldReason.DAY_OFF -> "No reminders today: $dayOffReason"
             holdReason == HoldReason.QUIET_HOURS -> "Reminders paused for quiet hours"
             minutesUntilBreak <= 0 -> "Break due now"
             minutesUntilBreak == 1 -> "Next break in 1 minute"
             else -> "Next break in $minutesUntilBreak minutes"
+        }
+
+    // Shown under the ring when sensing stops with the app.
+    val monitoringNote: String?
+        get() = if (backgroundMonitoring) {
+            null
+        } else {
+            "Background monitoring is off: tracking only while ErgoDesk is open"
+        }
+
+    /*
+     * What to do on a break: the user's preferred activity
+     * (Settings), with a walk taken outside only when the
+     * weather and time of day suit it (ContextEngine).
+     */
+    private val breakIdea: String
+        get() = when (breakActivity) {
+            UserSettings.ACTIVITY_EYE_REST ->
+                "Rest your eyes: look far away for 20 seconds"
+
+            UserSettings.ACTIVITY_WALK ->
+                if (suggestion == BreakSuggestion.OUTDOOR_WALK) {
+                    "Good time for a short walk outside"
+                } else {
+                    "Take a short walk indoors"
+                }
+
+            else ->
+                if (suggestion == BreakSuggestion.OUTDOOR_WALK) {
+                    "Stretch, or step outside: the weather's nice"
+                } else {
+                    "Try a quick desk stretch"
+                }
         }
 
     /*
@@ -119,8 +157,8 @@ data class HomeUiState(
             (ActivitySessions.LOGGED_BREAK_MILLIS / 60_000L).toInt()
 
         /*
-         * Combines today's sessions with stored records and
-         * cached weather. The break interval comes from
+         * Combines today's sessions with stored records, cached
+         * weather and the user's settings. The break interval comes from
          * ContextEngine, so Home shows the same threshold
          * ContextEvaluationWorker uses for the alarm.
          */
@@ -129,20 +167,32 @@ data class HomeUiState(
             sessions: SessionSummary,
             today: ActivityRecord?,
             history: List<ActivityRecord>,
-            hourOfDay: Int,
-            weather: WeatherSnapshot?
+            minuteOfDay: Int,
+            weather: WeatherSnapshot?,
+            settings: UserSettings
         ): HomeUiState {
 
             val boutMinutes =
                 (sessions.currentSittingSeconds / 60L).toInt()
+
+            val dayOffReason =
+                if (settings.calendarAware) {
+                    DayOffCalendar.dayOffReason(LocalDate.now())
+                } else {
+                    null
+                }
 
             val decision =
                 ContextEngine.evaluate(
                     ContextInput(
                         sittingBoutMinutes = boutMinutes,
                         complianceRate = ContextEngine.complianceRate(history),
-                        hourOfDay = hourOfDay,
-                        weather = weather
+                        minuteOfDay = minuteOfDay,
+                        baseIntervalMinutes = settings.breakIntervalMinutes,
+                        smartMode = settings.smartMode,
+                        dayOffReason = dayOffReason,
+                        weather = weather?.takeIf { settings.weatherAware },
+                        quietHours = settings.quietHours
                     )
                 )
 
@@ -154,7 +204,10 @@ data class HomeUiState(
                 breakIsLogged = sessions.currentBreakIsLogged,
                 breakIntervalMinutes = decision.intervalMinutes,
                 holdReason = decision.holdReason,
+                dayOffReason = dayOffReason,
                 suggestion = decision.suggestion,
+                backgroundMonitoring = settings.monitoringEnabled,
+                breakActivity = settings.breakActivity,
                 // Live from today's sessions, so total, longest
                 // and current always agree. Room gets the same
                 // totals from SensorIngestWorker.

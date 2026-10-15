@@ -14,6 +14,8 @@ import com.fit5046.ergodesk.data.sensor.ActivityIngest
 import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
+import com.fit5046.ergodesk.data.sensor.TrackingLog
+import com.fit5046.ergodesk.data.settings.SettingsRepository
 import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
@@ -46,16 +48,27 @@ class SensorIngestWorker(
             return Result.success()
         }
 
+        val settings =
+            SettingsRepository.read(applicationContext, user.uid)
+
         val today =
             AnalyticsCalculator.periodRange(AnalyticsPeriod.DAILY, now)
 
-        // Only time since the account was first signed in here counts.
+        // Only time when sensing was on counts: since the account
+        // was first signed in here, and with background
+        // monitoring off, only while the app was open.
         val sessions =
-            ActivitySessions.forRange(
+            ActivitySessions.forIntervals(
                 simulator = SensorDataSimulator.fromAssets(applicationContext),
-                startMillis = maxOf(today.startMillis, user.trackingStartMillis),
-                endMillis = now,
-                manualBreaks = ManualBreakStore.read(applicationContext, user.uid)
+                intervals = TrackingLog.intervals(
+                    context = applicationContext,
+                    userId = user.uid,
+                    trackingStartMillis = user.trackingStartMillis,
+                    fromMillis = today.startMillis,
+                    toMillis = now
+                ),
+                manualBreaks = ManualBreakStore.read(applicationContext, user.uid),
+                minBreakSeconds = settings.minBreakSeconds
             )
 
         val summary =

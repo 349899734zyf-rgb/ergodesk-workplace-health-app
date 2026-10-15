@@ -292,6 +292,20 @@ private fun HomeContent(
                             color = ringColor,
                             textAlign = TextAlign.Center
                         )
+
+                        state.monitoringNote?.let { note ->
+
+                            Spacer(
+                                Modifier.height(8.dp)
+                            )
+
+                            Text(
+                                note,
+                                fontSize = 12.sp,
+                                color = ErgoMutedText,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
