@@ -18,6 +18,9 @@ import com.fit5046.ergodesk.data.sensor.TrackingLog
 import com.fit5046.ergodesk.data.settings.SettingsRepository
 import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /*
@@ -100,6 +103,20 @@ class SensorIngestWorker(
                     "active ${existing?.activeMinutes ?: 0} -> ${updated.activeMinutes} min"
         )
 
+        // What the sensor showed most recently, as evidence the
+        // worker detected the changes between sitting and breaks.
+        val clock =
+            SimpleDateFormat("HH:mm:ss", Locale.ENGLISH)
+
+        Log.d(
+            TAG,
+            "Detected recently: " +
+                    sessions.takeLast(RECENT_SESSIONS_LOGGED).joinToString(", ") { session ->
+                        "${session.type} ${clock.format(Date(session.startMillis))}-" +
+                                "${clock.format(Date(session.endMillis))} (${session.minutes} min)"
+                    }
+        )
+
         return Result.success()
     }
 
@@ -108,6 +125,8 @@ class SensorIngestWorker(
         private const val TAG = "SensorIngestWorker"
 
         private const val WORK_NAME = "sensor_ingest"
+
+        private const val RECENT_SESSIONS_LOGGED = 3
 
         /*
          * Safe to call on every app start: KEEP leaves an

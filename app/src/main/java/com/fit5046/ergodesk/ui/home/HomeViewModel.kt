@@ -86,6 +86,8 @@ class HomeViewModel(
             ?: flowOf(UserSettings())
 
     // "Now: Sitting / Standing / Moving", from the live feed.
+    // Each change is logged with the readings behind it, so
+    // Logcat shows the classifier reacting to the sensor.
     private val livePosture: Flow<PostureState> =
         flow {
             val simulator =
@@ -94,10 +96,19 @@ class HomeViewModel(
             emitAll(
                 simulator
                     .liveSamples(System.currentTimeMillis())
-                    .map { PostureClassifier.classify(it) }
+                    .map { sample -> sample to PostureClassifier.classify(sample) }
             )
         }
-            .distinctUntilChanged()
+            .distinctUntilChanged { old, new -> old.second == new.second }
+            .onEach { (sample, posture) ->
+                Log.d(
+                    FEED_TAG,
+                    "Sensor now reads $posture " +
+                            "(thigh pitch ${"%.2f".format(sample.pitch)} rad, " +
+                            "movement ${"%.2f".format(sample.accMagnitude)} g)"
+                )
+            }
+            .map { it.second }
             .flowOn(Dispatchers.Default)
 
     /*
@@ -243,6 +254,7 @@ class HomeViewModel(
 
     private companion object {
         const val STATE_TAG = "HomeState"
+        const val FEED_TAG = "SensorFeed"
         const val SESSIONS_REFRESH_MILLIS = 10_000L
         // Same length as a logged break, so a second tap
         // can only come once the first break is over.
