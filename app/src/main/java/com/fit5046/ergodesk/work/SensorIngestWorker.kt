@@ -20,6 +20,8 @@ import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
+import com.google.firebase.auth.FirebaseAuth
+
 /*
  * Every 15 minutes: rebuilds today's sitting and break
  * sessions from the motion data and stores the day's
@@ -85,6 +87,12 @@ class SensorIngestWorker(
 
         val updated =
             ActivityIngest.withTodayTotals(existing, summary, now)
+
+        //Avoid saving activity if the account changed during processing
+        if (FirebaseAuth.getInstance().currentUser?.uid != user.uid) {
+            Log.d(TAG, "Account changed -> activity save skipped")
+            return Result.success()
+        }
 
         repository.upsertRecord(updated)
 

@@ -19,10 +19,11 @@ import kotlinx.coroutines.launch
  * Member 4 responsibility.
  */
 class WeatherViewModel(
-    application: Application,
-    private val repository: WeatherRepository = WeatherRepository(),
-    private val cache: WeatherCache = WeatherCache(application)
+    application: Application
 ) : AndroidViewModel(application) {
+
+    private val repository = WeatherRepository()
+    private val cache = WeatherCache(application)
 
     private val _weatherAdvice = MutableStateFlow(
         cache.read()?.let { repository.adviceFromSnapshot(it) } ?: repository.getUnavailableAdvice()

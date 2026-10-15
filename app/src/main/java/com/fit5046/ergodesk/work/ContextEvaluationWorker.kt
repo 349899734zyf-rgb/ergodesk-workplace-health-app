@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.util.concurrent.TimeUnit
 
+import com.google.firebase.auth.FirebaseAuth
+
 /*
  * Every 15 minutes: works out how long the user has been
  * sitting, asks ContextEngine whether a break is due and
@@ -122,6 +124,16 @@ class ContextEvaluationWorker(
 
         val delayMinutes =
             decision.minutesUntilDue.coerceAtLeast(0).toLong()
+
+        //Avoid scheduling a reminder for an account that has signed out
+        if (FirebaseAuth.getInstance().currentUser?.uid != user.uid) {
+            BreakAlarmScheduler.cancelBreakReminder(
+                applicationContext,
+                automatic = true
+            )
+            Log.d(TAG, "Account changed -> automatic reminder cleared")
+            return Result.success()
+        }
 
         if (scheduled) {
             // TODO(Suzie): pass decision.style and
