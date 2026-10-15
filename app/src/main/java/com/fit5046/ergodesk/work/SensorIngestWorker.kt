@@ -11,16 +11,19 @@ import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.ActivityIngest
-import com.fit5046.ergodesk.data.sensor.PostureClassifier
+import com.fit5046.ergodesk.data.sensor.ActivitySessions
+import com.fit5046.ergodesk.data.sensor.ManualBreakStore
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
 import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
 import java.util.concurrent.TimeUnit
 
 /*
- * Every 15 minutes: reads the last window of motion data,
- * classifies sitting vs active and adds the minutes to
- * today's ActivityRecord (A2 report, section 5.1).
+ * Every 15 minutes: rebuilds today's sitting and break
+ * sessions from the motion data and stores the day's
+ * sitting and active minutes in Room (A2 report, 5.1).
+ * Recomputing the whole day keeps the totals exact even
+ * when WorkManager runs late.
  *
  * Motion comes from SensorDataSimulator until real phone
  * sensors are wired in.
@@ -43,26 +46,23 @@ class SensorIngestWorker(
             return Result.success()
         }
 
+        val today =
+            AnalyticsCalculator.periodRange(AnalyticsPeriod.DAILY, now)
+
         // Only time since the account was first signed in here counts.
-        val windowStart =
-            maxOf(now - WINDOW_MILLIS, user.trackingStartMillis)
-
-        if (windowStart >= now) {
-            return Result.success()
-        }
-
-        val samples =
-            SensorDataSimulator.fromAssets(applicationContext)
-                .samplesBetween(windowStart, now)
+        val sessions =
+            ActivitySessions.forRange(
+                simulator = SensorDataSimulator.fromAssets(applicationContext),
+                startMillis = maxOf(today.startMillis, user.trackingStartMillis),
+                endMillis = now,
+                manualBreaks = ManualBreakStore.read(applicationContext, user.uid)
+            )
 
         val summary =
-            PostureClassifier.summarize(samples)
+            ActivitySessions.summarize(sessions)
 
         val repository =
             RepositoryProvider.activityRepository(applicationContext)
-
-        val today =
-            AnalyticsCalculator.periodRange(AnalyticsPeriod.DAILY, now)
 
         val existing =
             repository
@@ -71,17 +71,14 @@ class SensorIngestWorker(
                 .firstOrNull()
 
         val updated =
-            ActivityIngest.addToDailyRecord(existing, summary, now)
+            ActivityIngest.withTodayTotals(existing, summary, now)
 
         repository.upsertRecord(updated)
 
         Log.d(
             TAG,
-            "Window: ${samples.size} s -> $summary"
-        )
-        Log.d(
-            TAG,
-            "Today: sitting ${existing?.sittingMinutes ?: 0} -> ${updated.sittingMinutes} min, " +
+            "Today so far: ${sessions.size} sessions -> " +
+                    "sitting ${existing?.sittingMinutes ?: 0} -> ${updated.sittingMinutes} min, " +
                     "active ${existing?.activeMinutes ?: 0} -> ${updated.activeMinutes} min"
         )
 
@@ -93,11 +90,6 @@ class SensorIngestWorker(
         private const val TAG = "SensorIngestWorker"
 
         private const val WORK_NAME = "sensor_ingest"
-
-        // Matches the period, so consecutive runs do not
-        // overlap. WorkManager may run a little late, which
-        // can leave small gaps between windows.
-        private const val WINDOW_MILLIS = 15 * 60 * 1000L
 
         /*
          * Safe to call on every app start: KEEP leaves an

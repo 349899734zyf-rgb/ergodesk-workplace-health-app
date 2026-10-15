@@ -12,10 +12,9 @@ import com.fit5046.ergodesk.data.context.ContextEngine
 import com.fit5046.ergodesk.data.context.ContextInput
 import com.fit5046.ergodesk.data.context.WeatherCache
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
+import com.fit5046.ergodesk.data.sensor.ActivitySessions
 import com.fit5046.ergodesk.data.sensor.ManualBreakStore
-import com.fit5046.ergodesk.data.sensor.PostureClassifier
 import com.fit5046.ergodesk.data.sensor.SensorDataSimulator
-import com.fit5046.ergodesk.data.sensor.SittingBoutTracker
 import com.fit5046.ergodesk.data.user.CurrentUser
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
@@ -48,24 +47,19 @@ class ContextEvaluationWorker(
             return Result.success()
         }
 
-        val samples =
-            SensorDataSimulator.fromAssets(applicationContext)
-                .samplesBetween(now - SittingBoutTracker.LOOKBACK_MILLIS, now)
-
-        // A bout ends at the user's own "Take a break now" and
+        // The same sessions Home shows: a bout ends when the
+        // user stands up or presses "Take a break now", and
         // never starts before they were first signed in here.
-        val boutSince =
-            listOfNotNull(
-                ManualBreakStore.read(applicationContext, user.uid),
-                user.trackingStartMillis
-            ).maxOrNull()
+        val sessions =
+            ActivitySessions.forRange(
+                simulator = SensorDataSimulator.fromAssets(applicationContext),
+                startMillis = maxOf(now - ActivitySessions.LOOKBACK_MILLIS, user.trackingStartMillis),
+                endMillis = now,
+                manualBreaks = ManualBreakStore.read(applicationContext, user.uid)
+            )
 
         val sittingBoutMinutes =
-            SittingBoutTracker.capSince(
-                PostureClassifier.sittingBoutSeconds(samples),
-                now,
-                boutSince
-            ) / 60
+            (ActivitySessions.summarize(sessions).currentSittingSeconds / 60L).toInt()
 
         val window =
             ContextEngine.complianceWindow(now)
