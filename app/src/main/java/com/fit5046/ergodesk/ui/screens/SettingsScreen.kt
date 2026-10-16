@@ -223,7 +223,7 @@ fun SettingsScreen(
                     val saved = viewModel.save()
                     Toast.makeText(
                         context,
-                        if (saved) "Settings saved. Home now follows them." else "Sign in to save settings",
+                        if (saved) "Settings Saved!" else "Sign in to save settings!",
                         Toast.LENGTH_SHORT
                     ).show()
                 },

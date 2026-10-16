@@ -23,6 +23,8 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+import com.google.firebase.auth.FirebaseAuth
+
 /*
  * Every 15 minutes: rebuilds today's sitting and break
  * sessions from the motion data and stores the day's
@@ -96,6 +98,12 @@ class SensorIngestWorker(
                 hourly = ActivitySessions.hourly(sessions, today.startMillis),
                 nowMillis = now
             )
+
+        //Avoid saving activity if the account changed during processing
+        if (FirebaseAuth.getInstance().currentUser?.uid != user.uid) {
+            Log.d(TAG, "Account changed -> activity save skipped")
+            return Result.success()
+        }
 
         repository.upsertRecord(updated)
 

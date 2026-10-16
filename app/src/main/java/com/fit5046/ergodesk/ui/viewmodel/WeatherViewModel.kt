@@ -18,13 +18,12 @@ import kotlinx.coroutines.launch
  * Exposes reactive StateFlow for Compose UI.
  * Member 4 responsibility.
  */
-// @JvmOverloads gives the (Application) constructor that the
-// default ViewModel factory looks for; without it the app crashes.
-class WeatherViewModel @JvmOverloads constructor(
-    application: Application,
-    private val repository: WeatherRepository = WeatherRepository(),
-    private val cache: WeatherCache = WeatherCache(application)
+class WeatherViewModel(
+    application: Application
 ) : AndroidViewModel(application) {
+
+    private val repository = WeatherRepository()
+    private val cache = WeatherCache(application)
 
     private val _weatherAdvice = MutableStateFlow(
         cache.read()?.let { repository.adviceFromSnapshot(it) } ?: repository.getUnavailableAdvice()

@@ -31,6 +31,11 @@ class SettingsViewModel(
     private val user =
         CurrentUser.get(application)
 
+    private fun currentAccountMatches(): Boolean {
+        val currentUid = FirebaseAuth.getInstance().currentUser?.uid
+        return user != null && currentUid == user.uid
+    }
+
     val accountEmail: String =
         user?.email ?: "Not signed in"
 
@@ -55,18 +60,14 @@ class SettingsViewModel(
         _draft.update(transform)
     }
 
-    /*
-     * Returns false when nobody is signed in.
-     */
     fun save(): Boolean {
+        val account = user ?: return false
 
-        val account =
-            user ?: return false
-
+        if (!currentAccountMatches()) {
+            return false
+        }
         SettingsRepository.save(getApplication(), account.uid, _draft.value)
         saved.value = _draft.value
-
-        // Background monitoring may have been switched.
         ForegroundTracker.update()
 
         // With it off there are no background reminders, so
@@ -76,7 +77,6 @@ class SettingsViewModel(
         }
 
         Log.d(TAG, "Saved -> ${_draft.value}")
-
         return true
     }
 
