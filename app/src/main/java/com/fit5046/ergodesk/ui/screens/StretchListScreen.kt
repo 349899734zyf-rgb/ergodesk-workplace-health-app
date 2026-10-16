@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.Search
@@ -187,6 +188,7 @@ fun StretchListScreen(
     val filteredList by viewModel.filteredStretches.collectAsState()
     val weatherAdvice by weatherViewModel.weatherAdvice.collectAsState()
     var showAddDialog by remember { mutableStateOf(false) }
+    var stretchToDelete by remember { mutableStateOf<StretchItemEntity?>(null) }
 
     val categories = listOf("All", "Neck", "Shoulders", "Lower back", "Wrists", "Chest", "Legs")
 
@@ -357,7 +359,10 @@ fun StretchListScreen(
                     items(filteredList, key = { it.id }) { stretch ->
                         StretchCard(
                             item = stretch,
-                            onClick = { onStretchClick(stretch.id.toString()) }
+                            onClick = { onStretchClick(stretch.id.toString()) },
+                            onDelete = if (stretch.isCustom) {
+                                { stretchToDelete = stretch }
+                            } else null
                         )
                     }
                 }
@@ -526,6 +531,48 @@ fun StretchListScreen(
             }
         )
     }
+
+    // -------------------------------------------------------------
+    // Delete Confirmation Dialog for Custom Stretches
+    // -------------------------------------------------------------
+    if (stretchToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { stretchToDelete = null },
+            containerColor = Color.White,
+            title = {
+                Text(
+                    text = "Delete Routine",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ErgoTextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to delete '${stretchToDelete?.title}'? This action cannot be undone.",
+                    fontSize = 14.sp,
+                    color = ErgoTextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        stretchToDelete?.let { viewModel.deleteStretch(it.id) }
+                        stretchToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Delete", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { stretchToDelete = null }) {
+                    Text("Cancel", color = ErgoTextSecondary)
+                }
+            }
+        )
+    }
 }
 
 /**
@@ -594,7 +641,8 @@ private fun StretchListHeader() {
 @Composable
 private fun StretchCard(
     item: StretchItemEntity,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: (() -> Unit)? = null
 ) {
     Surface(
         modifier = Modifier
@@ -612,12 +660,30 @@ private fun StretchCard(
         ) {
             // Card Text Details
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = item.title,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = ErgoTextPrimary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.title,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ErgoTextPrimary
+                    )
+
+                    if (item.isCustom) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFFF1F8EE)
+                        ) {
+                            Text(
+                                text = "Custom",
+                                fontSize = 10.sp,
+                                color = ErgoGreen,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
@@ -635,6 +701,20 @@ private fun StretchCard(
                     fontSize = 12.sp,
                     color = ErgoTextSecondary
                 )
+            }
+
+            if (item.isCustom && onDelete != null) {
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Delete Routine",
+                        tint = Color(0xFFE53935)
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
             }
 
             Icon(

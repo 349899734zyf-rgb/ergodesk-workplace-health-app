@@ -20,12 +20,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,6 +39,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -83,6 +86,7 @@ fun StretchDetailScreen(
     var isTimerRunning by remember { mutableStateOf(false) }
     var isFavorite by remember { mutableStateOf(false) }
     var showCompletionBanner by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     val instructionsList = remember(stretchEntity?.instructions) {
         stretchEntity?.instructions?.split("\n")?.filter { it.isNotBlank() } ?: listOf(
@@ -143,6 +147,15 @@ fun StretchDetailScreen(
                 }
             },
             actions = {
+                if (stretchEntity?.isCustom == true) {
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Routine",
+                            tint = Color(0xFFE53935)
+                        )
+                    }
+                }
                 IconButton(onClick = { isFavorite = !isFavorite }) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -372,6 +385,49 @@ fun StretchDetailScreen(
             }
 
             Spacer(modifier = Modifier.height(40.dp))
+        }
+
+        // ---------------------------------------------------------
+        // Delete Confirmation Dialog for Custom Stretches
+        // ---------------------------------------------------------
+        if (showDeleteConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                containerColor = Color.White,
+                title = {
+                    Text(
+                        text = "Delete Routine",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ErgoTextPrimary
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Are you sure you want to delete '${stretchEntity?.title}'? This action cannot be undone.",
+                        fontSize = 14.sp,
+                        color = ErgoTextSecondary
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showDeleteConfirm = false
+                            viewModel.deleteStretch(id)
+                            onBack()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Delete", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) {
+                        Text("Cancel", color = ErgoTextSecondary)
+                    }
+                }
+            )
         }
     }
 }
