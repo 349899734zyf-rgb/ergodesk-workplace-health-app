@@ -8,6 +8,7 @@ import com.fit5046.ergodesk.alarm.BreakAlarmScheduler
 import com.fit5046.ergodesk.data.analytics.AnalyticsCalculator
 import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.context.ContextEngine
+import com.fit5046.ergodesk.data.context.QuietHours
 import com.fit5046.ergodesk.data.context.WeatherCache
 import com.fit5046.ergodesk.data.repository.RepositoryProvider
 import com.fit5046.ergodesk.data.sensor.ActivityIngest
@@ -22,6 +23,7 @@ import com.fit5046.ergodesk.data.sensor.TrackingLog
 import com.fit5046.ergodesk.data.settings.SettingsRepository
 import com.fit5046.ergodesk.data.settings.UserSettings
 import com.fit5046.ergodesk.data.user.CurrentUser
+import com.fit5046.ergodesk.data.user.TrackedUser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -132,25 +134,9 @@ class HomeViewModel(
 
                     while (true) {
                         emit(
-                            if (user == null) {
-                                emptyList()
-                            } else {
-                                ActivitySessions.forIntervals(
-                                    simulator = simulator,
-                                    intervals = TrackingLog.withoutQuietHours(
-                                        TrackingLog.intervals(
-                                            context = getApplication(),
-                                            userId = user.uid,
-                                            trackingStartMillis = user.trackingStartMillis,
-                                            fromMillis = today.startMillis,
-                                            toMillis = System.currentTimeMillis()
-                                        ),
-                                        quietHours
-                                    ),
-                                    manualBreaks = breaks,
-                                    minBreakSeconds = minBreakSeconds
-                                )
-                            }
+                            user?.let {
+                                sessionsSoFar(simulator, it, breaks, minBreakSeconds, quietHours)
+                            } ?: emptyList()
                         )
 
                         delay(SESSIONS_REFRESH_MILLIS)
@@ -163,6 +149,33 @@ class HomeViewModel(
                 started = SharingStarted.WhileSubscribed(5_000),
                 initialValue = emptyList()
             )
+
+    // Today's sessions up to now, for the tracked intervals
+    // minus quiet hours.
+    private fun sessionsSoFar(
+        simulator: SensorDataSimulator,
+        account: TrackedUser,
+        manualBreaks: List<Long>,
+        minBreakSeconds: Int,
+        quietHours: QuietHours
+    ): List<ActivitySession> {
+
+        return ActivitySessions.forIntervals(
+            simulator = simulator,
+            intervals = TrackingLog.withoutQuietHours(
+                TrackingLog.intervals(
+                    context = getApplication(),
+                    userId = account.uid,
+                    trackingStartMillis = account.trackingStartMillis,
+                    fromMillis = today.startMillis,
+                    toMillis = System.currentTimeMillis()
+                ),
+                quietHours
+            ),
+            manualBreaks = manualBreaks,
+            minBreakSeconds = minBreakSeconds
+        )
+    }
 
     val uiState: StateFlow<HomeUiState> =
         combine(
@@ -204,9 +217,11 @@ class HomeViewModel(
     /*
      * "Take a break now": the next 5 minutes count as a break
      * (Home turns blue), counts a completed break for today
-     * and clears the
-     * pending automatic reminder, since the user is already
-     * on a break. A manual snooze is kept.
+     * and clears the pending automatic reminder, since the
+     * user is already on a break. A manual snooze is kept.
+     *
+     * Today's Room record is updated at once, so Analytics
+     * doesn't wait for the next SensorIngestWorker run.
      *
      * Returns false, and counts nothing, when the last break
      * was under BREAK_COOLDOWN_MILLIS ago, so repeated taps
@@ -230,7 +245,19 @@ class HomeViewModel(
 
         ManualBreakStore.record(getApplication(), account.uid, now)
 
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.Default) {
+
+            val accountSettings =
+                SettingsRepository.read(getApplication(), account.uid)
+
+            val sessions =
+                sessionsSoFar(
+                    simulator = SensorDataSimulator.fromAssets(getApplication()),
+                    account = account,
+                    manualBreaks = ManualBreakStore.read(getApplication(), account.uid),
+                    minBreakSeconds = accountSettings.minBreakSeconds,
+                    quietHours = accountSettings.quietHours
+                )
 
             val existing =
                 repository
@@ -239,7 +266,12 @@ class HomeViewModel(
                     .firstOrNull()
 
             val updated =
-                ActivityIngest.addBreak(existing, now)
+                ActivityIngest.withTodayTotals(
+                    existing = existing,
+                    summary = ActivitySessions.summarize(sessions),
+                    hourly = ActivitySessions.hourly(sessions, today.startMillis),
+                    nowMillis = now
+                )
 
             repository.upsertRecord(updated)
 

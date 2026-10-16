@@ -27,9 +27,10 @@ data class ActivitySession(
 }
 
 /*
- * The three sitting figures Home shows, all from the same
- * session list so they always agree:
- * total today >= longest session >= current session.
+ * The figures Home shows, all from the same session list so
+ * they always agree: total today >= longest session >=
+ * current session, and every break on the timeline counts
+ * towards breaksCompleted.
  */
 data class SessionSummary(
     val sittingSeconds: Long,
@@ -38,7 +39,8 @@ data class SessionSummary(
     val currentSittingSeconds: Long,
     // Set instead of currentSittingSeconds while on a break.
     val currentBreakSeconds: Long,
-    val currentBreakIsLogged: Boolean
+    val currentBreakIsLogged: Boolean,
+    val breaksCompleted: Int
 ) {
 
     val onBreak: Boolean
@@ -336,7 +338,35 @@ object ActivitySessions {
             // At least one second, so a break that just began
             // already counts as being on a break.
             currentBreakSeconds = currentBreak?.let { maxOf(it.seconds, 1L) } ?: 0L,
-            currentBreakIsLogged = currentBreak?.type == SessionType.LOGGED_BREAK
+            currentBreakIsLogged = currentBreak?.type == SessionType.LOGGED_BREAK,
+            breaksCompleted = countBreaks(sessions)
         )
+    }
+
+    /*
+     * A sensed break counts once the user has stood or moved
+     * for the minimum break time straight after sitting, the
+     * same moment Home's ring turns blue. A break right after
+     * a gap in tracking (app closed with background
+     * monitoring off, or quiet hours) is not counted, as it
+     * is unknown whether the user was sitting before it.
+     * Every "Take a break now" break counts; a sensed break
+     * that follows one is the same break.
+     */
+    private fun countBreaks(
+        sessions: List<ActivitySession>
+    ): Int {
+
+        val logged =
+            sessions.count { it.type == SessionType.LOGGED_BREAK }
+
+        val sensed =
+            sessions.zipWithNext().count { (previous, session) ->
+                session.type == SessionType.BREAK &&
+                        previous.type == SessionType.SITTING &&
+                        previous.endMillis == session.startMillis
+            }
+
+        return logged + sensed
     }
 }

@@ -111,7 +111,8 @@ class SensorIngestWorker(
             TAG,
             "Today so far: ${sessions.size} sessions -> " +
                     "sitting ${existing?.sittingMinutes ?: 0} -> ${updated.sittingMinutes} min, " +
-                    "active ${existing?.activeMinutes ?: 0} -> ${updated.activeMinutes} min"
+                    "active ${existing?.activeMinutes ?: 0} -> ${updated.activeMinutes} min, " +
+                    "breaks ${existing?.breaksCompleted ?: 0} -> ${updated.breaksCompleted}"
         )
 
         // What the sensor showed most recently, as evidence the

@@ -218,12 +218,12 @@ data class HomeUiState(
                 suggestion = decision.suggestion,
                 backgroundMonitoring = settings.monitoringEnabled,
                 breakActivity = settings.breakActivity,
-                // Live from today's sessions, so total, longest
-                // and current always agree. Room gets the same
-                // totals from SensorIngestWorker.
+                // Live from today's sessions, so total, longest,
+                // current and breaks always agree. Room gets the
+                // same totals from SensorIngestWorker.
                 sittingTodayMinutes = (sessions.sittingSeconds / 60L).toInt(),
                 longestSitMinutes = (sessions.longestSittingSeconds / 60L).toInt(),
-                breaksCompleted = today?.breaksCompleted ?: 0,
+                breaksCompleted = sessions.breaksCompleted,
                 breakTarget = today?.breakTarget ?: ActivityIngest.DEFAULT_BREAK_TARGET
             )
         }

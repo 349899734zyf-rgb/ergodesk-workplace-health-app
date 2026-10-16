@@ -13,11 +13,12 @@ object ActivityIngest {
     const val DEFAULT_BREAK_TARGET = 8
 
     /*
-     * Sets today's sitting and active minutes from the day's
-     * sessions so far. Recomputed from scratch on every run,
-     * so a late or repeated run never double-counts or skips
-     * time, and the totals match what Home shows. Standing
-     * and moving both count as active time.
+     * Sets today's sitting and active minutes and breaks
+     * completed from the day's sessions so far. Recomputed
+     * from scratch on every run, so a late or repeated run
+     * never double-counts or skips anything, and the totals
+     * match what Home shows. Standing and moving both count
+     * as active time.
      */
     fun withTodayTotals(
         existing: ActivityRecord?,
@@ -32,26 +33,9 @@ object ActivityIngest {
         return base.copy(
             sittingMinutes = (summary.sittingSeconds / 60L).toInt(),
             activeMinutes = (summary.activeSeconds / 60L).toInt(),
+            breaksCompleted = summary.breaksCompleted,
             hourlySittingMinutes = hourly.sittingMinutes,
             hourlyActiveMinutes = hourly.activeMinutes
-        )
-    }
-
-    /*
-     * The user took a break from Home ("Take a break now").
-     * Feeds break compliance, which ContextEngine uses to
-     * choose the reminder interval.
-     */
-    fun addBreak(
-        existing: ActivityRecord?,
-        nowMillis: Long
-    ): ActivityRecord {
-
-        val base =
-            existing ?: emptyDay(nowMillis)
-
-        return base.copy(
-            breaksCompleted = base.breaksCompleted + 1
         )
     }
 
