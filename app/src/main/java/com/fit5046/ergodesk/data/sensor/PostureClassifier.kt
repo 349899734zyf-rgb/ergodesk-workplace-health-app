@@ -9,14 +9,10 @@ enum class PostureState {
 /*
  * One second of phone motion, already reduced to the two
  * features the classifier needs.
- *
- * trueLabel is the ground truth from the MotionSense
- * dataset, kept for checking accuracy; the app classifies.
  */
 data class MotionSample(
     val pitch: Float,
-    val accMagnitude: Float,
-    val trueLabel: PostureState
+    val accMagnitude: Float
 )
 
 /*

@@ -5,6 +5,7 @@ import com.fit5046.ergodesk.data.analytics.AnalyticsPeriod
 import com.fit5046.ergodesk.data.local.ActivityRecordDao
 import com.fit5046.ergodesk.data.model.ActivityRecord
 import com.fit5046.ergodesk.data.model.ActivityRecordEntity
+import com.fit5046.ergodesk.data.sensor.ActivityIngest
 import com.fit5046.ergodesk.data.user.TrackedUser
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -91,7 +92,8 @@ class RoomActivityRepository(
 
         /*
          * Demo history for the SEED_DAYS full days before
-         * today, reusing the prototype pattern.
+         * today. Values vary by weekday so that the weekly
+         * and monthly totals in Analytics are not flat.
          */
         fun seedHistory(
             nowMillis: Long
@@ -102,15 +104,26 @@ class RoomActivityRepository(
                     .periodRange(AnalyticsPeriod.DAILY, nowMillis)
                     .startMillis
 
-            val firstDay =
-                Calendar.getInstance().apply {
-                    timeInMillis = todayStart
-                    add(Calendar.DAY_OF_YEAR, -SEED_DAYS)
-                }.timeInMillis
+            return (SEED_DAYS downTo 1).map { daysAgo ->
 
-            return FakeActivityRepository
-                .generatePrototypeRecords()
-                .filter { it.timestamp in firstDay until todayStart }
+                val noon =
+                    Calendar.getInstance().apply {
+                        timeInMillis = todayStart
+                        add(Calendar.DAY_OF_YEAR, -daysAgo)
+                        set(Calendar.HOUR_OF_DAY, 12)
+                    }.timeInMillis
+
+                val pattern =
+                    daysAgo % 7
+
+                ActivityRecord(
+                    timestamp = noon,
+                    sittingMinutes = 330 + pattern * 14,
+                    activeMinutes = 105 + (6 - pattern) * 8,
+                    breaksCompleted = 4 + pattern % 4,
+                    breakTarget = ActivityIngest.DEFAULT_BREAK_TARGET
+                )
+            }
         }
     }
 }

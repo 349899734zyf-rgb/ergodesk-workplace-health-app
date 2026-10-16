@@ -13,7 +13,7 @@ import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Chair
 import androidx.compose.material.icons.filled.Coffee
-import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Eco
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lightbulb
@@ -317,7 +317,7 @@ fun AnalyticsScreen() {
 
                 AnalyticsMetricCard(
                     modifier = Modifier.weight(1f),
-                    icon = Icons.Filled.DirectionsWalk,
+                    icon = Icons.AutoMirrored.Filled.DirectionsWalk,
                     background = ActiveBackground,
                     title = "Active Time",
                     value = AnalyticsCalculator.formatMinutes(activeMinutes),

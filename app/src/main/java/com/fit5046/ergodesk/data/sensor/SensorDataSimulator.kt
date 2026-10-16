@@ -12,16 +12,14 @@ import kotlinx.coroutines.flow.flow
  * Wall-clock time maps onto the timeline, so workers can
  * ask what the "sensor" read at any moment without a
  * running service, and Home can follow liveSamples().
- * The timeline loops; speed > 1 plays it faster for demos.
+ * The timeline loops.
  */
 class SensorDataSimulator(
-    private val timeline: List<MotionSample>,
-    private val speed: Int = 1
+    private val timeline: List<MotionSample>
 ) {
 
     init {
         require(timeline.isNotEmpty()) { "Timeline is empty" }
-        require(speed >= 1) { "Speed must be at least 1" }
     }
 
     fun sampleAt(
@@ -29,7 +27,7 @@ class SensorDataSimulator(
     ): MotionSample {
 
         val second =
-            Math.floorDiv(timeMillis, 1000L) * speed
+            Math.floorDiv(timeMillis, 1000L)
 
         return timeline[Math.floorMod(second, timeline.size.toLong()).toInt()]
     }
@@ -84,8 +82,7 @@ class SensorDataSimulator(
         const val TIMELINE_ASSET = "motion_timeline.csv"
 
         fun fromAssets(
-            context: Context,
-            speed: Int = 1
+            context: Context
         ): SensorDataSimulator {
 
             val lines =
@@ -93,16 +90,15 @@ class SensorDataSimulator(
                     .bufferedReader()
                     .use { it.readLines() }
 
-            return SensorDataSimulator(
-                timeline = parseTimeline(lines),
-                speed = speed
-            )
+            return SensorDataSimulator(parseTimeline(lines))
         }
 
         /*
          * Parses motion_timeline.csv, built by
          * tools/build_motion_timeline.py:
          *   second,pitch,accMagnitude,label
+         * The label column is the dataset's ground truth;
+         * the app classifies samples itself.
          */
         fun parseTimeline(
             lines: List<String>
@@ -115,8 +111,7 @@ class SensorDataSimulator(
                     val columns = line.split(",")
                     MotionSample(
                         pitch = columns[1].toFloat(),
-                        accMagnitude = columns[2].toFloat(),
-                        trueLabel = PostureState.valueOf(columns[3].trim())
+                        accMagnitude = columns[2].toFloat()
                     )
                 }
         }

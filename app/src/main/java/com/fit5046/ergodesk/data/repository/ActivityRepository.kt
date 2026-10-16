@@ -8,9 +8,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * Home, Analytics and the workers only depend on this
  * interface. RepositoryProvider supplies the Room-backed
- * RoomActivityRepository; FakeActivityRepository keeps an
- * in-memory version and the prototype data used to seed
- * Room's history.
+ * RoomActivityRepository.
  */
 interface ActivityRepository {
 
